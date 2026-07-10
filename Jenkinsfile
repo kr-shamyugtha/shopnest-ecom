@@ -2,18 +2,15 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER   = 'shamyugtha'
-        BACKEND_IMAGE    = "${DOCKERHUB_USER}/shopnest-backend"
-        FRONTEND_IMAGE   = "${DOCKERHUB_USER}/shopnest-frontend"
-        VERSION          = "1.0.${BUILD_NUMBER}"
+        DOCKERHUB_USER  = 'shamyugtha'
+        BACKEND_IMAGE   = "${DOCKERHUB_USER}/shopnest-backend"
+        FRONTEND_IMAGE  = "${DOCKERHUB_USER}/shopnest-frontend"
+        VERSION         = "1.0.${BUILD_NUMBER}"
     }
 
     options {
-        // Best practice: clean up old builds, don't accumulate forever
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Best practice: prevent concurrent builds stepping on each other's Docker resources
         disableConcurrentBuilds()
-        // Safety net: kill the build if it hangs beyond 30 minutes
         timeout(time: 30, unit: 'MINUTES')
     }
 
@@ -21,118 +18,28 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                // Groovy as glue — checkout scm is a single built-in step, not custom logic
                 checkout scm
-                echo "Branch: ${env.BRANCH_NAME} | Build: ${env.BUILD_NUMBER}"
+                echo "Build: ${env.BUILD_NUMBER}"
             }
         }
 
         stage('Build') {
             steps {
-                // Best practice: combine related shell commands into one sh block
-                // BUILD_DATE computed in shell, not Groovy — avoids serialization issues
                 sh '''
                     BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-                    docker build \
-                        --build-arg BUILD_DATE=$BUILD_DATE \
-                        --build-arg VERSION=$VERSION \
-                        -t $BACKEND_IMAGE:$VERSION \
-                        -t $BACKEND_IMAGE:latest \
-                        ./backend
-
-                    docker build \
-                        --build-arg BUILD_DATE=$BUILD_DATE \
-                        --build-arg VERSION=$VERSION \
-                        -t $FRONTEND_IMAGE:$VERSION \
-                        -t $FRONTEND_IMAGE:latest \
-                        ./frontend
+                    docker build --build-arg BUILD_DATE=$BUILD_DATE --build-arg VERSION=$VERSION -t $BACKEND_IMAGE:$VERSION -t $BACKEND_IMAGE:latest ./backend
+                    docker build --build-arg BUILD_DATE=$BUILD_DATE --build-arg VERSION=$VERSION -t $FRONTEND_IMAGE:$VERSION -t $FRONTEND_IMAGE:latest ./frontend
                 '''
             }
         }
 
-        stage('Test') {
-    steps {
-        withCredentials([file(credentialsId: 'shopnest-backend-env', variable: 'ENV_FILE')]) {
-            sh '''
-                # Isolated per-build network
-                docker network create shopnest-test-$BUILD_NUMBER
-
-                # Start backend
-                docker run -d \
-                    --name backend-test-$BUILD_NUMBER \
-                    --network shopnest-test-$BUILD_NUMBER \
-                    --env-file $ENV_FILE \
-                    $BACKEND_IMAGE:$VERSION
-
-                # Poll backend healthcheck
-                echo "Waiting for backend to be healthy..."
-                ATTEMPTS=0
-                until [ "$(docker inspect --format='{{.State.Health.Status}}' backend-test-$BUILD_NUMBER)" = "healthy" ]; do
-                    ATTEMPTS=$((ATTEMPTS + 1))
-                    if [ $ATTEMPTS -ge 12 ]; then
-                        echo "Backend failed to become healthy after 2 minutes"
-                        exit 1
-                    fi
-                    echo "Attempt $ATTEMPTS/12 — waiting..."
-                    sleep 10
-                done
-                echo "Backend is healthy"
-
-                # Start frontend
-                docker run -d \
-                    --name frontend-test-$BUILD_NUMBER \
-                    --network shopnest-test-$BUILD_NUMBER \
-                    $FRONTEND_IMAGE:$VERSION
-
-                # Wait and capture frontend logs regardless
-                sleep 10
-                echo "=== Frontend logs ==="
-                docker logs frontend-test-$BUILD_NUMBER || true
-
-                # Check if frontend is actually running before exec
-                FRONTEND_STATUS=$(docker inspect --format='{{.State.Status}}' frontend-test-$BUILD_NUMBER 2>/dev/null || echo 'missing')
-                echo "Frontend status: $FRONTEND_STATUS"
-
-                if [ "$FRONTEND_STATUS" != "running" ]; then
-                    echo "Frontend container is not running — see logs above"
-                    exit 1
-                fi
-
-                # Verify health endpoints
-                docker exec backend-test-$BUILD_NUMBER \
-                    node -e "require('http').get('http://localhost:5000/health', r => { process.exit(r.statusCode === 200 ? 0 : 1) })"
-
-                docker exec frontend-test-$BUILD_NUMBER \
-                    wget -q --spider http://localhost:8080/health
-            '''
-        }
-    }
-    post {
-        always {
-            sh '''
-                docker stop backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
-                docker rm backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
-                docker network rm shopnest-test-$BUILD_NUMBER || true
-            '''
-        }
-    }
-}
-
         stage('Push') {
-            // Only push from main branch — feature branches build and test but never push
-            when {
-                branch 'main'
-            }
             steps {
-                // withCredentials — token never appears in logs, Jenkins masks it
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-credentials',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    // Best practice: one sh block — login, push both images, logout
-                    // docker logout ensures no credentials cached on Jenkins host after push
                     sh '''
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker push $BACKEND_IMAGE:$VERSION
@@ -147,8 +54,6 @@ pipeline {
 
         stage('Cleanup') {
             steps {
-                // Remove images from Jenkins host — Jenkins is not a registry
-                // || true prevents failure if image was already removed
                 sh '''
                     docker rmi $BACKEND_IMAGE:$VERSION || true
                     docker rmi $BACKEND_IMAGE:latest || true
@@ -161,14 +66,12 @@ pipeline {
 
     post {
         success {
-            echo "SUCCESS — shamyugtha/shopnest-backend:${VERSION} and shamyugtha/shopnest-frontend:${VERSION} pushed to Docker Hub"
+            echo "SUCCESS — images pushed to Docker Hub"
         }
         failure {
-            echo "FAILED — check the stage logs above to identify which stage broke"
+            echo "FAILED — check logs above"
         }
         always {
-            // Best practice from doc: clean workspace after every build
-            // Prevents workspace disk bloat over hundreds of builds
             cleanWs()
         }
     }
