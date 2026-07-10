@@ -52,65 +52,72 @@ pipeline {
         }
 
         stage('Test') {
-            steps {
-                // withCredentials injects .env at runtime — never stored in repo or image
-                withCredentials([file(credentialsId: 'shopnest-backend-env', variable: 'ENV_FILE')]) {
-                    // Best practice: one sh block does all test work — start, wait, verify, stop
-                    sh '''
-                        # Isolated per-build network — no collision between concurrent builds
-                        docker network create shopnest-test-$BUILD_NUMBER
+    steps {
+        withCredentials([file(credentialsId: 'shopnest-backend-env', variable: 'ENV_FILE')]) {
+            sh '''
+                # Isolated per-build network
+                docker network create shopnest-test-$BUILD_NUMBER
 
-                        # Start backend
-                        docker run -d \
-                            --name backend-test-$BUILD_NUMBER \
-                            --network shopnest-test-$BUILD_NUMBER \
-                            --env-file $ENV_FILE \
-                            $BACKEND_IMAGE:$VERSION
+                # Start backend
+                docker run -d \
+                    --name backend-test-$BUILD_NUMBER \
+                    --network shopnest-test-$BUILD_NUMBER \
+                    --env-file $ENV_FILE \
+                    $BACKEND_IMAGE:$VERSION
 
-                        # Poll healthcheck — shell loop, not Groovy logic
-                        echo "Waiting for backend to be healthy..."
-                        ATTEMPTS=0
-                        until [ "$(docker inspect --format='{{.State.Health.Status}}' backend-test-$BUILD_NUMBER)" = "healthy" ]; do
-                            ATTEMPTS=$((ATTEMPTS + 1))
-                            if [ $ATTEMPTS -ge 12 ]; then
-                                echo "Backend failed to become healthy after 2 minutes"
-                                exit 1
-                            fi
-                            echo "Attempt $ATTEMPTS/12 — waiting..."
-                            sleep 10
-                        done
-                        echo "Backend is healthy"
+                # Poll backend healthcheck
+                echo "Waiting for backend to be healthy..."
+                ATTEMPTS=0
+                until [ "$(docker inspect --format='{{.State.Health.Status}}' backend-test-$BUILD_NUMBER)" = "healthy" ]; do
+                    ATTEMPTS=$((ATTEMPTS + 1))
+                    if [ $ATTEMPTS -ge 12 ]; then
+                        echo "Backend failed to become healthy after 2 minutes"
+                        exit 1
+                    fi
+                    echo "Attempt $ATTEMPTS/12 — waiting..."
+                    sleep 10
+                done
+                echo "Backend is healthy"
 
-                        # Start frontend
-                        docker run -d \
-                            --name frontend-test-$BUILD_NUMBER \
-                            --network shopnest-test-$BUILD_NUMBER \
-                            $FRONTEND_IMAGE:$VERSION
+                # Start frontend
+                docker run -d \
+                    --name frontend-test-$BUILD_NUMBER \
+                    --network shopnest-test-$BUILD_NUMBER \
+                    $FRONTEND_IMAGE:$VERSION
 
-                        # Give frontend 10 seconds to start
-                        sleep 10
+                # Wait and capture frontend logs regardless
+                sleep 10
+                echo "=== Frontend logs ==="
+                docker logs frontend-test-$BUILD_NUMBER || true
 
-                        # Verify both health endpoints respond
-                        docker exec backend-test-$BUILD_NUMBER \
-                            node -e "require('http').get('http://localhost:5000/health', r => { process.exit(r.statusCode === 200 ? 0 : 1) })"
+                # Check if frontend is actually running before exec
+                FRONTEND_STATUS=$(docker inspect --format='{{.State.Status}}' frontend-test-$BUILD_NUMBER 2>/dev/null || echo 'missing')
+                echo "Frontend status: $FRONTEND_STATUS"
 
-                        docker exec frontend-test-$BUILD_NUMBER \
-                            wget -q --spider http://localhost:8080/health
-                    '''
-                }
-            }
-            post {
-                // Best practice: cleanup always runs — even if test stage fails
-                // Prevents orphaned containers/networks accumulating on Jenkins host
-                always {
-                    sh '''
-                        docker stop backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
-                        docker rm backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
-                        docker network rm shopnest-test-$BUILD_NUMBER || true
-                    '''
-                }
-            }
+                if [ "$FRONTEND_STATUS" != "running" ]; then
+                    echo "Frontend container is not running — see logs above"
+                    exit 1
+                fi
+
+                # Verify health endpoints
+                docker exec backend-test-$BUILD_NUMBER \
+                    node -e "require('http').get('http://localhost:5000/health', r => { process.exit(r.statusCode === 200 ? 0 : 1) })"
+
+                docker exec frontend-test-$BUILD_NUMBER \
+                    wget -q --spider http://localhost:8080/health
+            '''
         }
+    }
+    post {
+        always {
+            sh '''
+                docker stop backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
+                docker rm backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
+                docker network rm shopnest-test-$BUILD_NUMBER || true
+            '''
+        }
+    }
+}
 
         stage('Push') {
             // Only push from main branch — feature branches build and test but never push
