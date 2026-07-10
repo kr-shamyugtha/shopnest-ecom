@@ -36,7 +36,7 @@ pipeline {
         stage('Push') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'shopnest-docker',
+                    credentialsId: 'shopnest-doc',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
