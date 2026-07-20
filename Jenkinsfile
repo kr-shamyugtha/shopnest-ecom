@@ -118,6 +118,12 @@ pipeline {
     }
 }
 
+stage('Debug') {
+    steps {
+        echo "Current branch: ${env.BRANCH_NAME}"
+    }
+}
+
         stage('Push') {
             when {
                 branch 'main'
