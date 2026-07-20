@@ -118,16 +118,17 @@ pipeline {
     }
 }
 
-stage('Debug') {
-    steps {
-        echo "Current branch: ${env.BRANCH_NAME}"
-    }
-}
+
 
         stage('Push') {
             when {
-                branch 'main'
-            }
+        expression {
+            return sh(
+                script: 'git branch --show-current',
+                returnStdout: true
+            ).trim() == 'main'
+        }
+    }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'shopnest-doc',
