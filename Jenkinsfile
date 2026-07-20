@@ -56,66 +56,67 @@ pipeline {
         }
 
         stage('Test') {
-            steps {
-                withCredentials([file(credentialsId: 'shopnest-backend-env', variable: 'ENV_FILE')]) {
-                    sh '''
-                        docker network create shopnest-test-$BUILD_NUMBER
+    steps {
+        withCredentials([file(credentialsId: 'shopnest-backend-env', variable: 'ENV_FILE')]) {
+            sh '''
+                docker network create shopnest-test-$BUILD_NUMBER
 
-                        docker run -d \
-                            --name backend-test-$BUILD_NUMBER \
-                            --network shopnest-test-$BUILD_NUMBER \
-                            --env-file $ENV_FILE \
-                            $BACKEND_IMAGE:$VERSION
+                docker run -d \
+                    --name backend-test-$BUILD_NUMBER \
+                    --network shopnest-test-$BUILD_NUMBER \
+                    --env-file $ENV_FILE \
+                    $BACKEND_IMAGE:$VERSION
 
-                        echo "Waiting for backend to be healthy..."
-                        ATTEMPTS=0
-                        until [ "$(docker inspect --format='{{.State.Health.Status}}' backend-test-$BUILD_NUMBER)" = "healthy" ]; do
-                            ATTEMPTS=$((ATTEMPTS + 1))
-                            if [ $ATTEMPTS -ge 12 ]; then
-                                echo "Backend failed to become healthy"
-                                exit 1
-                            fi
-                            echo "Attempt $ATTEMPTS/12 — waiting..."
-                            sleep 10
-                        done
-                        echo "Backend is healthy"
+                echo "Waiting for backend to be healthy..."
+                ATTEMPTS=0
+                until [ "$(docker inspect --format='{{.State.Health.Status}}' backend-test-$BUILD_NUMBER)" = "healthy" ]; do
+                    ATTEMPTS=$((ATTEMPTS + 1))
+                    if [ $ATTEMPTS -ge 12 ]; then
+                        echo "Backend failed to become healthy"
+                        docker logs backend-test-$BUILD_NUMBER
+                        exit 1
+                    fi
+                    echo "Attempt $ATTEMPTS/12 — waiting..."
+                    sleep 10
+                done
+                echo "Backend is healthy"
 
-                        docker run -d \
-                            --name frontend-test-$BUILD_NUMBER \
-                            --network shopnest-test-$BUILD_NUMBER \
-                            $FRONTEND_IMAGE:$VERSION
+                docker run -d \
+                    --name frontend-test-$BUILD_NUMBER \
+                    --network shopnest-test-$BUILD_NUMBER \
+                    $FRONTEND_IMAGE:$VERSION
 
-                        sleep 10
+                echo "Waiting for frontend to be healthy..."
+                ATTEMPTS=0
+                until [ "$(docker inspect --format='{{.State.Health.Status}}' frontend-test-$BUILD_NUMBER)" = "healthy" ]; do
+                    ATTEMPTS=$((ATTEMPTS + 1))
+                    if [ $ATTEMPTS -ge 12 ]; then
+                        echo "Frontend failed to become healthy"
+                        docker logs frontend-test-$BUILD_NUMBER
+                        exit 1
+                    fi
+                    echo "Attempt $ATTEMPTS/12 — waiting..."
+                    sleep 10
+                done
+                echo "Frontend is healthy"
 
-                        echo "=== Frontend logs ==="
-                        docker logs frontend-test-$BUILD_NUMBER || true
+                docker exec backend-test-$BUILD_NUMBER \
+                    node -e "require('http').get('http://localhost:5000/health', r => { process.exit(r.statusCode === 200 ? 0 : 1) })"
 
-                        FRONTEND_STATUS=$(docker inspect --format='{{.State.Status}}' frontend-test-$BUILD_NUMBER 2>/dev/null || echo 'missing')
-                        echo "Frontend status: $FRONTEND_STATUS"
-
-                        if [ "$FRONTEND_STATUS" != "running" ]; then
-                            echo "Frontend container is not running"
-                            exit 1
-                        fi
-
-                        docker exec backend-test-$BUILD_NUMBER \
-                            node -e "require('http').get('http://localhost:5000/health', r => { process.exit(r.statusCode === 200 ? 0 : 1) })"
-
-                        docker exec frontend-test-$BUILD_NUMBER \
-                            wget -q --spider http://localhost:8080/health
-                    '''
-                }
-            }
-            post {
-                always {
-                    sh '''
-                        docker stop backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
-                        docker rm backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
-                        docker network rm shopnest-test-$BUILD_NUMBER || true
-                    '''
-                }
-            }
+                echo "All health checks passed"
+            '''
         }
+    }
+    post {
+        always {
+            sh '''
+                docker stop backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
+                docker rm backend-test-$BUILD_NUMBER frontend-test-$BUILD_NUMBER || true
+                docker network rm shopnest-test-$BUILD_NUMBER || true
+            '''
+        }
+    }
+}
 
         stage('Push') {
             when {
