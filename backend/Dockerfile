@@ -22,7 +22,8 @@ LABEL maintainer="Shamyugtha" \
       org.opencontainers.image.version="${VERSION}"
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init && \
+    apk upgrade --no-cache libcrypto3 libssl3
 COPY --from=build /app .
 RUN rm -rf node_modules && \
     npm ci --omit=dev && \

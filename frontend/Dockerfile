@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG NODE_VERSION=20.19-alpine
+ARG NODE_VERSION=20-alpine
 ARG NGINX_VERSION=1.27-alpine
 
 # ---------- Build stage ----------
@@ -20,6 +20,8 @@ LABEL maintainer="Shamyugtha" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.version="${VERSION}"
 
+RUN apk upgrade --no-cache libcrypto3 libssl3
+
 COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
@@ -29,10 +31,7 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chown nginx:nginx /var/run/nginx.pid
 
 USER nginx
-
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD wget -q --spider http://localhost:8080/ || exit 1
-
 CMD ["nginx", "-g", "daemon off;"]
