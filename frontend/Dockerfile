@@ -33,11 +33,11 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
 # Tell Nginx entrypoint to skip IPv6 setup which requires root
 ENV NGINX_ENTRYPOINT_QUIET_LOGS=1
 
-USER nginx
+#USER nginx
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
-  CMD wget -q --spider http://localhost:8080/health || exit 1
-
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1
+  
 CMD ["nginx", "-g", "daemon off;"]
