@@ -23,6 +23,29 @@ pipeline {
             }
         }
 
+        stage('Install Dependencies') {
+    steps {
+        sh '''
+            npm ci
+            cd backend && npm ci
+            cd ../frontend && npm ci
+        '''
+    }
+}
+
+stage('SonarQube Analysis') {
+    environment {
+        SCANNER_HOME = tool 'SonarScanner'
+    }
+    steps {
+        withSonarQubeEnv('SonarQube') {
+            sh '''
+                $SCANNER_HOME/bin/sonar-scanner
+            '''
+        }
+    }
+}
+
         stage('Build') {
             steps {
                 sh '''
@@ -161,8 +184,8 @@ pipeline {
 
     post {
         success {
-            echo "SUCCESS — shamyugtha/shopnest-backend:${VERSION} and shamyugtha/shopnest-frontend:${VERSION} pushed to Docker Hub"
-        }
+    echo "Pipeline completed successfully."
+}
         failure {
             echo "FAILED — check logs above"
         }
