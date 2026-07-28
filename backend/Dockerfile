@@ -23,7 +23,7 @@ LABEL maintainer="Shamyugtha" \
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache dumb-init && \
-    apk upgrade --no-cache libcrypto3 libssl3 && 
+    apk upgrade --no-cache libcrypto3 libssl3 
 COPY --from=build /app .
 RUN rm -rf node_modules && \
     npm ci --omit=dev && \
