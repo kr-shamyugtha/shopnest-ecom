@@ -86,10 +86,11 @@ stage('SonarQube Analysis') {
                 docker network create shopnest-test-$BUILD_NUMBER
 
                 docker run -d \
-                    --name backend-test-$BUILD_NUMBER \
-                    --network shopnest-test-$BUILD_NUMBER \
-                    --env-file $ENV_FILE \
-                    $BACKEND_IMAGE:$VERSION
+    --name backend-test-$BUILD_NUMBER \
+    --network shopnest-test-$BUILD_NUMBER \
+    --network-alias backend \
+    --env-file $ENV_FILE \
+    $BACKEND_IMAGE:$VERSION
 
                 echo "Waiting for backend to be healthy..."
                 ATTEMPTS=0
