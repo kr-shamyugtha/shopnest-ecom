@@ -143,15 +143,20 @@ stage('SonarQube Analysis') {
     }
 }
 
-
+stage('Debug Git') {
+    steps {
+        sh 'git branch --show-current || true'
+        echo "GIT_BRANCH = ${env.GIT_BRANCH}"
+        echo "BRANCH_NAME = ${env.BRANCH_NAME}"
+        sh 'git rev-parse --abbrev-ref HEAD'
+    }
+}
 
         stage('Push') {
-            when {
+             when {
         expression {
-            return sh(
-                script: 'git branch --show-current',
-                returnStdout: true
-            ).trim() == 'main'
+            return env.GIT_BRANCH == 'origin/main' ||
+                   env.GIT_BRANCH == 'main'
         }
     }
             steps {
