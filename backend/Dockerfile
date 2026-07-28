@@ -27,7 +27,10 @@ RUN apk add --no-cache dumb-init && \
 COPY --from=build /app .
 RUN rm -rf node_modules && \
     npm ci --omit=dev && \
-    npm cache clean --force
+    npm cache clean --force && \
+    rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/bin/npm \
+           /usr/local/bin/npx
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup && \
     mkdir -p /app/uploads && \
