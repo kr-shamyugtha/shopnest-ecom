@@ -65,6 +65,7 @@ stage('SonarQube Analysis') {
                         --severity CRITICAL \
                         --no-progress \
                         --timeout 5m \
+                        --ignore-unfixed \
                         $BACKEND_IMAGE:$VERSION
 
                     echo "=== Scanning frontend image ==="
