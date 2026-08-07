@@ -6,3 +6,21 @@ frontend/node_modules/
 # Environment Variables
 backend/.env
 frontend/.env
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Sensitive variable files 
+*.tfvars
+*.tfvars.json
+
+# Keep the lock file though 
+!.terraform.lock.hcl
+
+#sonarqube
+.scannerwork/
