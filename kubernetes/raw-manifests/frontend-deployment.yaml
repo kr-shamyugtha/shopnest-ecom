@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopnest-frontend
+  labels:
+    app: shopnest-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shopnest-frontend
+  template:
+    metadata:
+      labels:
+        app: shopnest-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: shopnestacr.azurecr.io/shopnest-frontend:v1
+          ports:
+            - containerPort: 8080

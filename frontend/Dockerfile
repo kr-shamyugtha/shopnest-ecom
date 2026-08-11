@@ -8,6 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+ARG REACT_APP_RAZORPAY_KEY_ID
+ENV REACT_APP_RAZORPAY_KEY_ID=$REACT_APP_RAZORPAY_KEY_ID
 RUN npm run build
 
 # ---------- Production stage ----------
