@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopnest-backend
+  labels:
+    app: shopnest-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shopnest-backend
+  template:
+    metadata:
+      labels:
+        app: shopnest-backend
+    spec:
+      containers:
+        - name: backend
+          image: shopnestacr.azurecr.io/shopnest-backend:v1
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: shopnest-backend-secret
+            - configMapRef:
+                name: shopnest-backend-config
