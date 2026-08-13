@@ -35,8 +35,14 @@ const Checkout = () => {
         }
       }
 
-      const options = {
-        key: process.env.REACT_APP_RAZORPAY_KEY_ID, // Student dummy fallback
+      const razorpayKey = window.RUNTIME_CONFIG?.RAZORPAY_KEY_ID;
+
+if (!razorpayKey) {
+  return alert("Razorpay Key ID is not configured");
+}
+
+const options = {
+  key: razorpayKey,
         amount: orderData.amount,
         currency: orderData.currency,
         name: 'ShopNest',
