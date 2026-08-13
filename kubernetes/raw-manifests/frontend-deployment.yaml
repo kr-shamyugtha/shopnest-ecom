@@ -4,8 +4,16 @@ metadata:
   name: shopnest-frontend
   labels:
     app: shopnest-frontend
+    app.kubernetes.io/name: shopnest-frontend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: frontend
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: shopnest-frontend
@@ -13,9 +21,41 @@ spec:
     metadata:
       labels:
         app: shopnest-frontend
+        app.kubernetes.io/name: shopnest-frontend
+        app.kubernetes.io/part-of: shopnest
+        app.kubernetes.io/component: frontend
     spec:
       containers:
         - name: frontend
-          image: shopnestacr.azurecr.io/shopnest-frontend:v1
+          image: shopnestacr.azurecr.io/shopnest-frontend:v2
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          volumeMounts:
+            - name: frontend-runtime-config
+              mountPath: /usr/share/nginx/html/config.js
+              subPath: config.js
+              readOnly: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: frontend-runtime-config
+          configMap:
+            name: shopnest-frontend-config
