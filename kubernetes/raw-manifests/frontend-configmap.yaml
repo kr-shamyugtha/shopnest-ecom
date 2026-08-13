@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopnest-frontend-config
+data:
+  config.js: |
+    window.RUNTIME_CONFIG = {
+      RAZORPAY_KEY_ID: "rzp_test_TOpPJJoN5F2yHB"
+    };

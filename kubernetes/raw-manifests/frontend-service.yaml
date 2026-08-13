@@ -2,10 +2,15 @@ apiVersion: v1
 kind: Service
 metadata:
   name: shopnest-frontend
+  labels:
+    app.kubernetes.io/name: shopnest-frontend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: frontend
 spec:
   selector:
     app: shopnest-frontend
   ports:
     - port: 8080
       targetPort: 8080
+      name: http
   type: ClusterIP
