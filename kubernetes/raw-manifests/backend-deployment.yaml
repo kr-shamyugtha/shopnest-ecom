@@ -4,54 +4,60 @@ metadata:
   name: shopnest-backend
   labels:
     app: shopnest-backend
-    app.kubernetes.io/name: shopnest-backend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: backend
 spec:
   replicas: 2
+
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
       maxUnavailable: 0
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: shopnest-backend
+
   template:
     metadata:
       labels:
         app: shopnest-backend
-        app.kubernetes.io/name: shopnest-backend
-        app.kubernetes.io/part-of: shopnest
-        app.kubernetes.io/component: backend
+
     spec:
       containers:
         - name: backend
           image: shopnestacr.azurecr.io/shopnest-backend:v1
-          imagePullPolicy: Always
+
           ports:
             - containerPort: 5000
+
           envFrom:
             - secretRef:
                 name: shopnest-backend-secret
             - configMapRef:
                 name: shopnest-backend-config
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "300m"
-              memory: "256Mi"
-          livenessProbe:
+
+          readinessProbe:
             httpGet:
               path: /health
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 10
-          readinessProbe:
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
             httpGet:
               path: /health
               port: 5000
-            initialDelaySeconds: 5
-            periodSeconds: 5
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
