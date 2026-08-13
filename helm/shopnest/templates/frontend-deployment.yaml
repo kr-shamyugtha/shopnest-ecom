@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopnest-frontend
+  labels:
+    app: shopnest-frontend
+    app.kubernetes.io/name: shopnest-frontend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: frontend
+
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: shopnest-frontend
+
+  template:
+    metadata:
+      labels:
+        app: shopnest-frontend
+        app.kubernetes.io/name: shopnest-frontend
+        app.kubernetes.io/part-of: shopnest
+        app.kubernetes.io/component: frontend
+
+    spec:
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: {{ .Values.frontend.port }}
+
+          volumeMounts:
+            - name: frontend-runtime-config
+              mountPath: /usr/share/nginx/html/config.js
+              subPath: config.js
+              readOnly: true
+
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.frontend.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.frontend.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+      volumes:
+        - name: frontend-runtime-config
+          configMap:
+            name: shopnest-frontend-config

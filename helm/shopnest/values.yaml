@@ -1,0 +1,33 @@
+backend:
+  image:
+    repository: shopnestacr.azurecr.io/shopnest-backend
+    tag: v1
+
+  replicas: 2
+  port: 5000
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+frontend:
+  image:
+    repository: shopnestacr.azurecr.io/shopnest-frontend
+    tag: v2
+
+  replicas: 2
+  port: 8080
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
