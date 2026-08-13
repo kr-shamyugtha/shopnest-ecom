@@ -4,57 +4,65 @@ metadata:
   name: shopnest-frontend
   labels:
     app: shopnest-frontend
-    app.kubernetes.io/name: shopnest-frontend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: frontend
+
 spec:
   replicas: 2
+
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
       maxUnavailable: 0
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: shopnest-frontend
+
   template:
     metadata:
       labels:
         app: shopnest-frontend
-        app.kubernetes.io/name: shopnest-frontend
-        app.kubernetes.io/part-of: shopnest
-        app.kubernetes.io/component: frontend
+
     spec:
       containers:
         - name: frontend
           image: shopnestacr.azurecr.io/shopnest-frontend:v2
-          imagePullPolicy: Always
+
           ports:
             - containerPort: 8080
+
           volumeMounts:
             - name: frontend-runtime-config
               mountPath: /usr/share/nginx/html/config.js
               subPath: config.js
               readOnly: true
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
           resources:
             requests:
               cpu: "50m"
               memory: "64Mi"
             limits:
-              cpu: "200m"
-              memory: "128Mi"
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 5
+              cpu: "250m"
+              memory: "256Mi"
+
       volumes:
         - name: frontend-runtime-config
           configMap:
