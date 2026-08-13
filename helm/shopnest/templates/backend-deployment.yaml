@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopnest-backend
+  labels:
+    app: shopnest-backend
+    app.kubernetes.io/name: shopnest-backend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: backend
+
+spec:
+  replicas: {{ .Values.backend.replicas }}
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: shopnest-backend
+
+  template:
+    metadata:
+      labels:
+        app: shopnest-backend
+        app.kubernetes.io/name: shopnest-backend
+        app.kubernetes.io/part-of: shopnest
+        app.kubernetes.io/component: backend
+
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: {{ .Values.backend.port }}
+
+          envFrom:
+            - secretRef:
+                name: shopnest-backend-secret
+            - configMapRef:
+                name: shopnest-backend-config
+
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.backend.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.backend.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
