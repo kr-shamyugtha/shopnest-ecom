@@ -1,5 +1,33 @@
 const Order = require('../models/Order');
 const sendEmail = require('../utils/sendEmail');
+const {
+  ordersCreatedTotal,
+  orderCreationFailuresTotal
+} = require('../metrics/metrics');
+
+const updateOrderStatusMetrics = async () => {
+  const statuses = ['Pending', 'Shipped', 'Delivered'];
+
+  const counts = await Order.aggregate([
+    {
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const countMap = Object.fromEntries(
+    counts.map(item => [item._id, item.count])
+  );
+
+  for (const status of statuses) {
+    ordersByStatus.set(
+      { status },
+      countMap[status] || 0
+    );
+  }
+};
 
 const addOrderItems = async (req, res) => {
   try {
@@ -15,6 +43,7 @@ const addOrderItems = async (req, res) => {
         paymentId
       });
       const createdOrder = await order.save();
+      ordersCreatedTotal.inc();
 
       // Send Order Confirmation Email
       const message = `
@@ -35,8 +64,13 @@ const addOrderItems = async (req, res) => {
       res.status(201).json(createdOrder);
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  orderCreationFailuresTotal.inc();
+  await updateOrderStatusMetrics();
+
+  res.status(500).json({
+    message: error.message
+  });
+}
 };
 
 const getMyOrders = async (req, res) => {
@@ -63,6 +97,7 @@ const updateOrderStatus = async (req, res) => {
     if (order) {
       order.status = req.body.status || order.status;
       const updatedOrder = await order.save();
+      await updateOrderStatusMetrics();
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Order not found' });
