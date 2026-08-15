@@ -1,7 +1,14 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
+const {
+  paymentAttemptsTotal,
+  paymentVerificationSuccessTotal,
+  paymentVerificationFailuresTotal
+} = require('../metrics/metrics');
+
 const createOrder = async (req, res) => {
+  paymentAttemptsTotal.inc();
   try {
     const instance = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
@@ -24,18 +31,35 @@ const createOrder = async (req, res) => {
 
 const verifyPayment = async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    } = req.body;
+
     const sign = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSign = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(sign.toString())
       .digest("hex");
 
     if (razorpay_signature === expectedSign) {
-      return res.status(200).json({ message: "Payment verified successfully" });
+      paymentVerificationSuccessTotal.inc();
+
+      return res.status(200).json({
+        message: "Payment verified successfully"
+      });
     } else {
-      return res.status(400).json({ message: "Invalid signature sent!" });
+      paymentVerificationFailuresTotal.inc();
+
+      return res.status(400).json({
+        message: "Invalid signature sent!"
+      });
     }
   } catch (error) {
+    paymentVerificationFailuresTotal.inc();
+
     res.status(500).send(error);
   }
 };
