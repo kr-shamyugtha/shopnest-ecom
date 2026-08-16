@@ -8,6 +8,7 @@ backend/.env
 frontend/.env
 
 # Terraform
+**/.terragrunt-cache/
 **/.terraform/*
 *.tfstate
 *.tfstate.*
