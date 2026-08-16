@@ -1,0 +1,267 @@
+applications:
+  shopnest:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    project: shopnest
+    sources:
+      - repoURL: https://github.com/kr-shamyugtha/shopnest-ecom
+        path: helm/shopnest
+        targetRevision: HEAD
+        helm:
+          releaseName: shopnest
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: default
+    syncPolicy:
+      automated:
+        prune: false
+        selfHeal: false
+      syncOptions:
+        - CreateNamespace=true
+
+  monitoring:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    project: monitoring
+    sources:
+      - chart: kube-prometheus-stack
+        repoURL: https://prometheus-community.github.io/helm-charts
+        targetRevision: 87.21.0
+        helm:
+          releaseName: monitoring
+          values: |
+            grafana:
+              enabled: true
+              deploymentStrategy:
+                type: Recreate
+              persistence:
+                enabled: true
+                type: pvc
+                size: 5Gi
+              additionalDataSources:
+                - name: Loki
+                  type: loki
+                  access: proxy
+                  url: http://loki-gateway.monitoring.svc.cluster.local
+                  isDefault: false
+
+            prometheus:
+              enabled: true
+              prometheusSpec:
+                retention: 7d
+                storageSpec:
+                  volumeClaimTemplate:
+                    spec:
+                      accessModes:
+                        - ReadWriteOnce
+                      resources:
+                        requests:
+                          storage: 10Gi
+
+            alertmanager:
+              enabled: true
+              alertmanagerSpec:
+                storage:
+                  volumeClaimTemplate:
+                    spec:
+                      accessModes:
+                        - ReadWriteOnce
+                      resources:
+                        requests:
+                          storage: 2Gi
+              # NOTE: put the real Slack webhook URL in a Secret instead of
+              # committing it in plaintext here — see comment below.
+              config:
+                global: {}
+                route:
+                  receiver: "shopnest-slack"
+                  group_by: ["alertname", "severity"]
+                  group_wait: 30s
+                  group_interval: 5m
+                  repeat_interval: 3h
+                  routes:
+                    - matchers:
+                        - severity = critical
+                      receiver: "shopnest-slack"
+                      repeat_interval: 1h
+                receivers:
+                  - name: "shopnest-slack"
+                    slack_configs:
+                      - api_url: "https://hooks.slack.com/services/REPLACE/WITH/YOUR-WEBHOOK"
+                        channel: "#shopnest-alerts"
+                        send_resolved: true
+                        title: '{{ .CommonAnnotations.summary }}'
+                        text: '{{ .CommonAnnotations.description }}'
+
+            nodeExporter:
+              enabled: true
+
+            kubeStateMetrics:
+              enabled: true
+
+      - chart: loki
+        repoURL: https://grafana.github.io/helm-charts
+        targetRevision: 6.52.0
+        helm:
+          releaseName: loki
+          values: |
+            deploymentMode: SingleBinary
+
+            loki:
+              auth_enabled: false
+              commonConfig:
+                replication_factor: 1
+              storage:
+                type: filesystem
+              schemaConfig:
+                configs:
+                  - from: "2024-01-01"
+                    store: tsdb
+                    object_store: filesystem
+                    schema: v13
+                    index:
+                      prefix: loki_index_
+                      period: 24h
+
+            singleBinary:
+              replicas: 1
+              persistence:
+                enabled: true
+                size: 10Gi
+
+            chunksCache:
+              enabled: false
+
+            resultsCache:
+              enabled: false
+
+            # Disable the extra pods that come with the default distributed values
+            backend:
+              replicas: 0
+            read:
+              replicas: 0
+            write:
+              replicas: 0
+
+            gateway:
+              enabled: true
+
+            monitoring:
+              serviceMonitor:
+                enabled: true
+              selfMonitoring:
+                enabled: false
+              lokiCanary:
+                enabled: false
+
+            test:
+              enabled: false
+
+      - chart: alloy
+        repoURL: https://grafana.github.io/helm-charts
+        targetRevision: 1.11.1
+        helm:
+          releaseName: alloy
+          values: |
+            alloy:
+              configMap:
+                content: |-
+                  discovery.kubernetes "pods" {
+                    role = "pod"
+                  }
+
+                  discovery.relabel "pods" {
+                    targets = discovery.kubernetes.pods.targets
+
+                    rule {
+                      source_labels = ["__meta_kubernetes_namespace"]
+                      target_label  = "namespace"
+                    }
+
+                    rule {
+                      source_labels = ["__meta_kubernetes_pod_name"]
+                      target_label  = "pod"
+                    }
+
+                    rule {
+                      source_labels = ["__meta_kubernetes_pod_container_name"]
+                      target_label  = "container"
+                    }
+                  }
+
+                  loki.source.kubernetes "pods" {
+                    targets    = discovery.relabel.pods.output
+                    forward_to = [loki.write.default.receiver]
+                  }
+
+                  loki.write "default" {
+                    endpoint {
+                      url = "http://loki-gateway/loki/api/v1/push"
+                    }
+                  }
+
+            controller:
+              type: daemonset
+
+            serviceMonitor:
+              enabled: true
+
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: monitoring
+    syncPolicy:
+      automated:
+        prune: false
+        selfHeal: false
+      syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+
+projects:
+  shopnest:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    permitOnlyProjectScopedClusters: false
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    description: Example Project
+    sourceRepos:
+      - '*'
+    destinations:
+      - namespace: default
+        server: https://kubernetes.default.svc
+
+  monitoring:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    permitOnlyProjectScopedClusters: false
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    description: ShopNest monitoring stack
+    sourceRepos:
+      - https://prometheus-community.github.io/helm-charts
+      - https://grafana.github.io/helm-charts
+    destinations:
+      - namespace: "*"
+        server: https://kubernetes.default.svc
+    clusterResourceWhitelist:
+      - group: apiextensions.k8s.io
+        kind: CustomResourceDefinition
+      - group: rbac.authorization.k8s.io
+        kind: ClusterRole
+      - group: rbac.authorization.k8s.io
+        kind: ClusterRoleBinding
+      - group: admissionregistration.k8s.io
+        kind: MutatingWebhookConfiguration
+      - group: admissionregistration.k8s.io
+        kind: ValidatingWebhookConfiguration
+      - group: ""
+        kind: Namespace
