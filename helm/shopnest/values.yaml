@@ -1,7 +1,7 @@
 backend:
   image:
     repository: shopnestacr.azurecr.io/shopnest-backend
-    tag: v1
+    tag: v2
 
   replicas: 2
   port: 5000
