@@ -44,6 +44,11 @@ spec:
             - configMapRef:
                 name: shopnest-backend-config
 
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
 
@@ -64,3 +69,11 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
+
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: shopnest-backend
