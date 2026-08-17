@@ -8,6 +8,6 @@ metadata:
     app.kubernetes.io/component: backend
 
 data:
-  PORT: "5000"
-  NODE_ENV: "production"
-  FRONTEND_URL: "http://72.144.100.232"
+  PORT: {{ .Values.backend.config.port | quote }}
+  NODE_ENV: {{ .Values.backend.config.nodeEnv | quote }}
+  FRONTEND_URL: {{ .Values.backend.config.frontendUrl | quote }}

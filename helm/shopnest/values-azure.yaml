@@ -1,0 +1,25 @@
+backend:
+  image:
+    repository: shopnestacr.azurecr.io/shopnest-backend
+    tag: v2
+
+  config:
+    port: "5000"
+    nodeEnv: "production"
+    frontendUrl: "http://72.144.100.232"
+
+frontend:
+  image:
+    repository: shopnestacr.azurecr.io/shopnest-frontend
+    tag: v2
+
+  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+
+secrets:
+  enabled: true
+  providerClassName: shopnest-backend
+
+  azure:
+    userAssignedIdentityID: "443a5b48-6ea7-4187-9010-e98644a85da6"
+    keyvaultName: "shopnest-kv"
+    tenantId: "25ea82b6-dfae-45a3-8712-f925d1b3397d"
