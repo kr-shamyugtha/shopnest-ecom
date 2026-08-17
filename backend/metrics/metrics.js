@@ -40,11 +40,17 @@ const paymentVerificationFailuresTotal = new client.Counter({
   help: 'Total number of failed payment verifications'
 });
 
+const ordersTotal = new client.Gauge({
+  name: 'shopnest_orders_total',
+  help: 'Current total number of orders'
+});
+
 const ordersByStatus = new client.Gauge({
   name: 'shopnest_orders_by_status',
   help: 'Current number of orders by status',
   labelNames: ['status']
 });
+
 const updateOrderStatusMetrics = async (Order) => {
   const statuses = ['Pending', 'Shipped', 'Delivered'];
 
@@ -61,12 +67,20 @@ const updateOrderStatusMetrics = async (Order) => {
     counts.map(item => [item._id, item.count])
   );
 
+  let totalOrders = 0;
+
   for (const status of statuses) {
+    const count = countMap[status] || 0;
+
     ordersByStatus.set(
       { status },
-      countMap[status] || 0
+      count
     );
+
+    totalOrders += count;
   }
+
+  ordersTotal.set(totalOrders);
 };
 
 module.exports = {
@@ -78,6 +92,7 @@ module.exports = {
   paymentAttemptsTotal,
   paymentVerificationSuccessTotal,
   paymentVerificationFailuresTotal,
+  ordersTotal,
   ordersByStatus,
   updateOrderStatusMetrics
 };
