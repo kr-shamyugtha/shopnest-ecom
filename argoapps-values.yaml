@@ -11,7 +11,10 @@ applications:
         path: helm/shopnest
         targetRevision: HEAD
         helm:
-          releaseName: shopnest
+          helm:
+            releaseName: shopnest
+            valueFiles:
+              - values-azure.yaml
     destination:
       server: https://kubernetes.default.svc
       namespace: default
