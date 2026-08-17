@@ -39,15 +39,19 @@ spec:
             - containerPort: {{ .Values.backend.port }}
 
           envFrom:
+            {{- if .Values.secrets.enabled }}
             - secretRef:
                 name: shopnest-backend-secret
+            {{- end }}
             - configMapRef:
                 name: shopnest-backend-config
 
+{{- if .Values.secrets.enabled }}
           volumeMounts:
             - name: secrets-store
               mountPath: /mnt/secrets-store
               readOnly: true
+{{- end }}
 
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
@@ -70,10 +74,12 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
 
+{{- if .Values.secrets.enabled }}
       volumes:
         - name: secrets-store
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: shopnest-backend
+              secretProviderClass: {{ .Values.secrets.providerClassName }}
+{{- end }}
