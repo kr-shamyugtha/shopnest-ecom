@@ -1,10 +1,15 @@
 backend:
   image:
-    repository: shopnestacr.azurecr.io/shopnest-backend
+    repository: ""
     tag: v2
 
   replicas: 2
   port: 5000
+
+  config:
+    port: "5000"
+    nodeEnv: "production"
+    frontendUrl: ""
 
   resources:
     requests:
@@ -16,7 +21,7 @@ backend:
 
 frontend:
   image:
-    repository: shopnestacr.azurecr.io/shopnest-frontend
+    repository: ""
     tag: v2
 
   replicas: 2
@@ -30,4 +35,8 @@ frontend:
       cpu: "250m"
       memory: "256Mi"
 
-  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+  razorpayKeyId: ""
+
+secrets:
+  enabled: false
+  providerClassName: shopnest-backend

@@ -6,12 +6,14 @@ metadata:
     release: monitoring
     app.kubernetes.io/name: shopnest-backend
     app.kubernetes.io/part-of: shopnest
+
 spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: shopnest-backend
       app.kubernetes.io/part-of: shopnest
       app.kubernetes.io/component: backend
+
   endpoints:
     - port: http
       path: /metrics
