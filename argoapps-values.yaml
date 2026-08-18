@@ -244,9 +244,9 @@ projects:
     namespace: argocd
     additionalLabels: {}
     additionalAnnotations: {}
-    permitOnlyProjectScopedClusters: false
     finalizers:
       - resources-finalizer.argocd.argoproj.io
+    permitOnlyProjectScopedClusters: false
     description: ShopNest monitoring stack
     sourceRepos:
       - https://prometheus-community.github.io/helm-charts
