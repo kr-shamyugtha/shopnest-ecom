@@ -40,74 +40,48 @@ const paymentVerificationFailuresTotal = new client.Counter({
   help: 'Total number of failed payment verifications'
 });
 
-
-/*
- * Current total number of orders.
- *
- * This is a point-in-time value, so we calculate it
- * directly from MongoDB whenever Prometheus scrapes /metrics.
- */
 const ordersTotal = new client.Gauge({
   name: 'shopnest_orders_total',
-  help: 'Current total number of orders',
-
-  async collect() {
-    try {
-      const Order = require('../models/Order');
-
-      const count = await Order.countDocuments();
-
-      this.set(count);
-    } catch (error) {
-      console.error('Failed to collect shopnest_orders_total:', error);
-    }
-  }
+  help: 'Current total number of orders'
 });
 
-
-/*
- * Current number of orders by status.
- *
- * Values are read directly from MongoDB whenever
- * Prometheus scrapes /metrics.
- */
 const ordersByStatus = new client.Gauge({
   name: 'shopnest_orders_by_status',
   help: 'Current number of orders by status',
-  labelNames: ['status'],
-
-  async collect() {
-    try {
-      const Order = require('../models/Order');
-
-      const statuses = ['Pending', 'Shipped', 'Delivered'];
-
-      const counts = await Order.aggregate([
-        {
-          $group: {
-            _id: '$status',
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-
-      const countMap = Object.fromEntries(
-        counts.map(item => [item._id, item.count])
-      );
-
-      for (const status of statuses) {
-        this.set(
-          { status },
-          countMap[status] || 0
-        );
-      }
-
-    } catch (error) {
-      console.error('Failed to collect shopnest_orders_by_status:', error);
-    }
-  }
+  labelNames: ['status']
 });
 
+const updateOrderStatusMetrics = async (Order) => {
+  const statuses = ['Pending', 'Shipped', 'Delivered'];
+
+  const counts = await Order.aggregate([
+    {
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const countMap = Object.fromEntries(
+    counts.map(item => [item._id, item.count])
+  );
+
+  let totalOrders = 0;
+
+  for (const status of statuses) {
+    const count = countMap[status] || 0;
+
+    ordersByStatus.set(
+      { status },
+      count
+    );
+
+    totalOrders += count;
+  }
+
+  ordersTotal.set(totalOrders);
+};
 
 module.exports = {
   client,
@@ -119,5 +93,6 @@ module.exports = {
   paymentVerificationSuccessTotal,
   paymentVerificationFailuresTotal,
   ordersTotal,
-  ordersByStatus
+  ordersByStatus,
+  updateOrderStatusMetrics
 };

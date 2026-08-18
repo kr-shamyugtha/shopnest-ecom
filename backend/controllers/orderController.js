@@ -2,8 +2,7 @@ const Order = require('../models/Order');
 const sendEmail = require('../utils/sendEmail');
 const {
   ordersCreatedTotal,
-  orderCreationFailuresTotal,
-  updateOrderStatusMetrics
+  orderCreationFailuresTotal
 } = require('../metrics/metrics');
 
 const addOrderItems = async (req, res) => {
@@ -22,9 +21,7 @@ const addOrderItems = async (req, res) => {
       });
 
       const createdOrder = await order.save();
-
-      ordersCreatedTotal.inc();
-      await updateOrderStatusMetrics(Order);
+     
 
       // Send Order Confirmation Email
       const message = `
@@ -80,7 +77,6 @@ const updateOrderStatus = async (req, res) => {
 
       const updatedOrder = await order.save();
 
-      await updateOrderStatusMetrics(Order);
 
       res.json(updatedOrder);
     } else {
