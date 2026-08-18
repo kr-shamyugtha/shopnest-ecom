@@ -8,8 +8,7 @@ const Order = require('./models/Order');
 const {
   client,
   httpRequestsTotal,
-  httpRequestDuration,
-  updateOrderStatusMetrics
+  httpRequestDuration
 } = require('./metrics/metrics');
 
 dotenv.config();
@@ -88,9 +87,6 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
-
-    await updateOrderStatusMetrics(Order);
-
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
