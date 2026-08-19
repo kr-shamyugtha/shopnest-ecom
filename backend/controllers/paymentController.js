@@ -1,30 +1,50 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
+const PaymentAttempt = require('../models/PaymentAttempt');
+
 const {
-  paymentAttemptsTotal,
   paymentVerificationSuccessTotal,
   paymentVerificationFailuresTotal
 } = require('../metrics/metrics');
 
 const createOrder = async (req, res) => {
-  paymentAttemptsTotal.inc();
   try {
     const instance = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
-    
+
     // Razorpay accepts amount in paise
     const options = {
       amount: req.body.amount * 100,
       currency: "INR",
     };
-    
+
     const order = await instance.orders.create(options);
-    if (!order) return res.status(500).send("Some error occured");
+
+    if (!order) {
+      await PaymentAttempt.create({
+        amount: req.body.amount,
+        status: 'failed'
+      });
+
+      return res.status(500).send("Some error occured");
+    }
+
+    await PaymentAttempt.create({
+      amount: req.body.amount,
+      status: 'created',
+      paymentId: order.id
+    });
+
     res.json(order);
   } catch (error) {
+    await PaymentAttempt.create({
+      amount: req.body.amount,
+      status: 'failed'
+    });
+
     res.status(500).send(error);
   }
 };
