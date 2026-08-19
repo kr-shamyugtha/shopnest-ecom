@@ -1,7 +1,7 @@
 backend:
   image:
     repository: shopnestacr.azurecr.io/shopnest-backend
-    tag: v5
+    tag: v6
 
   config:
     port: "5000"
