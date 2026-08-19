@@ -25,9 +25,30 @@ const orderCreationFailuresTotal = new client.Counter({
   help: 'Total number of failed order creation attempts'
 });
 
-const paymentAttemptsTotal = new client.Counter({
+/*
+ * Total number of payment attempts recorded in MongoDB.
+ *
+ * This is a point-in-time value, so we calculate it
+ * directly from MongoDB whenever Prometheus scrapes /metrics.
+ */
+const paymentAttemptsTotal = new client.Gauge({
   name: 'shopnest_payment_attempts_total',
-  help: 'Total number of payment order creation attempts'
+  help: 'Total number of payment order creation attempts',
+
+  async collect() {
+    try {
+      const PaymentAttempt = require('../models/PaymentAttempt');
+
+      const count = await PaymentAttempt.countDocuments();
+
+      this.set(count);
+    } catch (error) {
+      console.error(
+        'Failed to collect shopnest_payment_attempts_total:',
+        error
+      );
+    }
+  }
 });
 
 const paymentVerificationSuccessTotal = new client.Counter({
