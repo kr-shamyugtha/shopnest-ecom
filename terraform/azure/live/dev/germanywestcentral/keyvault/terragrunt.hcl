@@ -18,7 +18,7 @@ dependency "resource_group" {
     name     = "mock-rg"
     location = "germanywestcentral"
   }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
 dependency "aks" {
@@ -26,14 +26,16 @@ dependency "aks" {
   mock_outputs = {
     kubelet_identity_object_id = "00000000-0000-0000-0000-000000000000"
   }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
 inputs = {
   project_name                   = local.project_name
+  environment         = local.environment
   location                       = dependency.resource_group.outputs.location
   resource_group_name            = dependency.resource_group.outputs.name
   aks_kubelet_identity_object_id = dependency.aks.outputs.kubelet_identity_object_id
+  key_vault_name = "shopnest-dev-kv2"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

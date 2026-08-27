@@ -1,3 +1,7 @@
+variable "environment" {
+  description = "Deployment environment"
+  type        = string
+}
 variable "project_name" {
   type = string
 }
@@ -18,4 +22,8 @@ variable "sku" {
 variable "tags" {
   type    = map(string)
   default = {}
+}
+variable "name" {
+  description = "Globally unique Azure Container Registry name"
+  type        = string
 }
