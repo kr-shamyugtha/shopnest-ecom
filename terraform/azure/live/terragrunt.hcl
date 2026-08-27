@@ -9,13 +9,13 @@ remote_state {
     if_exists = "overwrite"
   }
   config = {
-    resource_group_name  = "shopnest-tfstate-rg"
-    storage_account_name = "shopnesttfstate001"
-    container_name       = "tfstate"
-    key                  = "${path_relative_to_include()}.tfstate"
+  resource_group_name  = "shopnest-tfstate-rg"
+  storage_account_name = "shopnesttfstate002"
+  container_name       = "tfstate"
+  key                  = "${path_relative_to_include()}.tfstate"
+  use_azuread_auth = true
   }
 }
-
 generate "provider" {
   path      = "provider.tf"
   if_exists = "overwrite"

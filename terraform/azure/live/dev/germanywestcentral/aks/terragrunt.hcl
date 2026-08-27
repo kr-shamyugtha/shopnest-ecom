@@ -18,15 +18,15 @@ dependency "resource_group" {
     name     = "mock-rg"
     location = "germanywestcentral"
   }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
 dependency "networking" {
   config_path = "../networking"
   mock_outputs = {
-    aks_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/subnet"
+    aks_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.Network/virtualNetworks/mock-vnet/subnets/mock-aks-subnet"
   }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
 dependency "acr" {
@@ -34,11 +34,12 @@ dependency "acr" {
   mock_outputs = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/acr"
   }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
 inputs = {
   project_name         = local.project_name
+  environment         = local.environment
   location             = dependency.resource_group.outputs.location
   resource_group_name  = dependency.resource_group.outputs.name
   subnet_id            = dependency.networking.outputs.aks_subnet_id

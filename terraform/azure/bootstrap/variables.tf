@@ -8,18 +8,6 @@ variable "location" {
   default     = "germanywestcentral"
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "dev"
-}
-
-variable "project_name" {
-  description = "Project name, used for naming and tagging resources"
-  type        = string
-  default     = "shopnest"
-}
-
 # ============================================================================
 # Resource Group Configuration
 # ============================================================================
@@ -63,5 +51,28 @@ variable "tags" {
     ManagedBy   = "terraform"
     Environment = "dev"
     Purpose     = "terraform-state-backend"
+  }
+}
+
+
+variable "blob_delete_retention_days" {
+  description = "Number of days deleted blob data is retained for recovery."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.blob_delete_retention_days >= 7 && var.blob_delete_retention_days <= 365
+    error_message = "Blob delete retention must be between 7 and 365 days."
+  }
+}
+
+variable "container_delete_retention_days" {
+  description = "Number of days deleted containers are retained for recovery."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.container_delete_retention_days >= 7 && var.container_delete_retention_days <= 365
+    error_message = "Container delete retention must be between 7 and 365 days."
   }
 }

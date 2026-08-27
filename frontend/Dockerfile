@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 ARG NODE_VERSION=20-alpine
-ARG NGINX_VERSION=1.27-alpine
+ARG NGINX_VERSION=1.29-alpine
 
 # ---------- Build stage ----------
 FROM node:${NODE_VERSION} AS build

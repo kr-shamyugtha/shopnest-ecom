@@ -1,8 +1,8 @@
 resource "azurerm_kubernetes_cluster" "this" {
-  name                = "${var.project_name}-aks"
+  name = "${var.project_name}-${var.environment}-aks"
   location            = var.location
   resource_group_name = var.resource_group_name
-  dns_prefix          = "${var.project_name}-aks"
+  dns_prefix = "${var.project_name}-${var.environment}-aks"
   kubernetes_version  = var.kubernetes_version
 
   default_node_pool {

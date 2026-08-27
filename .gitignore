@@ -25,3 +25,10 @@ crash.*.log
 
 #sonarqube
 .scannerwork/
+
+# Local Terraform backups
+terraform-backups/
+
+# Generated security scan output
+trivy.json
+frontend/build/
