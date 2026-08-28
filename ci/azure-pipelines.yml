@@ -14,17 +14,20 @@ pool:
 stages:
 
   # ============================================================
-  # Stage 1: Tests
+  # Stage 1: Test
   # ============================================================
   - stage: Test
     displayName: "Run Tests"
 
     jobs:
-      - job: BackendTests
-        displayName: "Backend Tests"
+
+      - job: ApplicationTests
+        displayName: "Backend and Frontend Tests"
 
         steps:
+
           - checkout: self
+            displayName: "Checkout Source Code"
 
           - task: UseNode@1
             displayName: "Install Node.js"
@@ -34,8 +37,14 @@ stages:
           - script: |
               cd backend
               npm ci
-              npm test
-            displayName: "Run backend tests"
+              npm test -- --ci
+            displayName: "Run Backend Tests"
+
+          - script: |
+              cd frontend
+              npm ci
+              npm test -- --watchAll=false
+            displayName: "Run Frontend Tests"
 
 
   # ============================================================
@@ -48,11 +57,14 @@ stages:
     condition: succeeded()
 
     jobs:
+
       - job: ApplicationBuild
         displayName: "Build Frontend"
 
         steps:
+
           - checkout: self
+            displayName: "Checkout Source Code"
 
           - task: UseNode@1
             displayName: "Install Node.js"
@@ -62,10 +74,10 @@ stages:
           - script: |
               cd backend
               npm ci
-            displayName: "Install backend dependencies"
+            displayName: "Install Backend Dependencies"
 
           - script: |
               cd frontend
               npm ci
               npm run build
-            displayName: "Build frontend"
+            displayName: "Build Frontend"
