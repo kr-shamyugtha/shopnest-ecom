@@ -354,12 +354,40 @@ stages:
 
     jobs:
     - job: PushImages
-      displayName: "Push Approved Images"
+      displayName: "Push Approved Docker Images"
 
       steps:
-        - checkout: none
 
-        # Authenticate to Azure using OIDC
+        # ----------------------------------------------------
+        # Download the EXACT images that were built and scanned
+        # ----------------------------------------------------
+        - task: DownloadPipelineArtifact@2
+          displayName: "Download Scanned Docker Images"
+          inputs:
+            artifact: docker-images
+            path: "$(Pipeline.Workspace)/docker-images"
+
+        # ----------------------------------------------------
+        # Load images into Docker
+        # ----------------------------------------------------
+        - script: |
+            set -euo pipefail
+
+            echo "Loading approved Docker images..."
+
+            docker load \
+              --input "$(Pipeline.Workspace)/docker-images/backend.tar"
+
+            docker load \
+              --input "$(Pipeline.Workspace)/docker-images/frontend.tar"
+
+            echo "Images loaded successfully:"
+            docker images | grep "shopnestdevacr2.azurecr.io/shopnest-"
+          displayName: "Load Docker Images"
+
+        # ----------------------------------------------------
+        # Authenticate using Azure OIDC
+        # ----------------------------------------------------
         - task: AzureCLI@2
           displayName: "Login to Azure and Push Images"
           inputs:
@@ -382,13 +410,15 @@ stages:
 
               az acr login --name "$ACR_NAME"
 
-              echo "Pushing backend image:"
-              echo "$BACKEND_IMAGE"
+              echo "=============================================="
+              echo "Pushing Backend Image"
+              echo "=============================================="
 
               docker push "$BACKEND_IMAGE"
 
-              echo "Pushing frontend image:"
-              echo "$FRONTEND_IMAGE"
+              echo "=============================================="
+              echo "Pushing Frontend Image"
+              echo "=============================================="
 
               docker push "$FRONTEND_IMAGE"
 
