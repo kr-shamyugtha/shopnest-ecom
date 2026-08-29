@@ -223,3 +223,122 @@ stages:
               targetPath: "$(Build.ArtifactStagingDirectory)/docker-images"
               artifact: "docker-images"
               publishLocation: "pipeline"
+
+  # ============================================================
+  # Stage 5: Container Security Scan - Trivy
+  # ============================================================
+  - stage: SecurityScan
+    displayName: "Trivy Container Security Scan"
+
+    dependsOn: DockerBuild
+    condition: succeeded()
+
+    jobs:
+      - job: TrivyScan
+        displayName: "Scan Docker Images for Vulnerabilities"
+
+        steps:
+
+          - checkout: none
+
+          # ----------------------------------------------------
+          # Download Docker image artifacts
+          # ----------------------------------------------------
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download Docker Images"
+            inputs:
+              artifact: docker-images
+              path: "$(Pipeline.Workspace)/docker-images"
+
+          # ----------------------------------------------------
+          # Load Docker images into the Docker daemon
+          # ----------------------------------------------------
+          - script: |
+              set -e
+
+              echo "Loading backend Docker image..."
+              docker load \
+                -i "$(Pipeline.Workspace)/docker-images/shopnest-backend.tar"
+
+              echo "Loading frontend Docker image..."
+              docker load \
+                -i "$(Pipeline.Workspace)/docker-images/shopnest-frontend.tar"
+
+              echo ""
+              echo "Loaded Docker images:"
+              docker images | grep "shopnestdevacr2.azurecr.io/shopnest-"
+            displayName: "Load Docker Images"
+
+          # ----------------------------------------------------
+          # Install Trivy
+          # ----------------------------------------------------
+          - script: |
+              set -e
+
+              echo "Installing Trivy..."
+
+              sudo apt-get update
+              sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+
+              wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+                | gpg --dearmor \
+                | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] \
+                https://aquasecurity.github.io/trivy-repo/deb \
+                $(lsb_release -sc) main" \
+                | sudo tee /etc/apt/sources.list.d/trivy.list
+
+              sudo apt-get update
+              sudo apt-get install -y trivy
+
+              trivy --version
+            displayName: "Install Trivy"
+
+          # ----------------------------------------------------
+          # Scan Backend
+          # ----------------------------------------------------
+          - script: |
+              set -e
+
+              VERSION="1.0.$(Build.BuildId)"
+              BACKEND_IMAGE="shopnestdevacr2.azurecr.io/shopnest-backend:$VERSION"
+
+              echo "================================================"
+              echo "Scanning Backend Image"
+              echo "Image: $BACKEND_IMAGE"
+              echo "================================================"
+
+              trivy image \
+                --exit-code 1 \
+                --severity CRITICAL \
+                --no-progress \
+                --timeout 5m \
+                --ignore-unfixed \
+                "$BACKEND_IMAGE"
+
+            displayName: "Trivy Scan - Backend"
+
+          # ----------------------------------------------------
+          # Scan Frontend
+          # ----------------------------------------------------
+          - script: |
+              set -e
+
+              VERSION="1.0.$(Build.BuildId)"
+              FRONTEND_IMAGE="shopnestdevacr2.azurecr.io/shopnest-frontend:$VERSION"
+
+              echo "================================================"
+              echo "Scanning Frontend Image"
+              echo "Image: $FRONTEND_IMAGE"
+              echo "================================================"
+
+              trivy image \
+                --exit-code 1 \
+                --severity CRITICAL \
+                --no-progress \
+                --timeout 5m \
+                --ignore-unfixed \
+                "$FRONTEND_IMAGE"
+
+            displayName: "Trivy Scan - Frontend"
