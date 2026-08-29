@@ -104,7 +104,7 @@ stages:
           - task: SonarQubePrepare@7
             displayName: "Prepare SonarQube Analysis"
             inputs:
-              SonarQube: "ShopNest-SonarQube"
+              SonarQube: "SonarCloud-ShopNest"
               scannerMode: "CLI"
               configMode: "file"
 
