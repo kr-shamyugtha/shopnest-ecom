@@ -81,3 +81,37 @@ stages:
               npm ci
               npm run build
             displayName: "Build Frontend"
+            
+  # ============================================================
+  # Stage 3: SonarQube
+  # ============================================================
+  - stage: SonarQube
+    displayName: "SonarQube Analysis"
+
+    dependsOn: Test
+    condition: succeeded()
+
+    jobs:
+
+      - job: CodeQuality
+        displayName: "Code Quality Analysis"
+
+        steps:
+
+          - checkout: self
+            displayName: "Checkout Source Code"
+
+          - task: SonarQubePrepare@7
+            displayName: "Prepare SonarQube Analysis"
+            inputs:
+              SonarQube: "ShopNest-SonarQube"
+              scannerMode: "CLI"
+              configMode: "file"
+
+          - task: SonarQubeAnalyze@7
+            displayName: "Run SonarQube Analysis"
+
+          - task: SonarQubePublish@7
+            displayName: "Publish Quality Gate"
+            inputs:
+              pollingTimeoutSec: "300"
