@@ -344,7 +344,7 @@ stages:
             displayName: "Trivy Scan - Frontend"
 
   # ============================================================
-  # Stage 6: Push Docker Images to Azure Container Registry
+  # Stage 6: Push Images to ACR
   # ============================================================
   - stage: PushToACR
     displayName: "Push Docker Images to ACR"
@@ -353,56 +353,48 @@ stages:
     condition: succeeded()
 
     jobs:
-      - job: PushImages
-        displayName: "Push Approved Images"
+    - job: PushImages
+      displayName: "Push Approved Images"
 
-        steps:
+      steps:
+        - checkout: none
 
-          - checkout: none
-
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download Docker Images"
-            inputs:
-              buildType: "current"
-              artifactName: "docker-images"
-              targetPath: "$(Pipeline.Workspace)/docker-images"
-
-          - script: |
-              set -e
-
-              echo "Loading Docker images..."
-
-              docker load \
-                --input "$(Pipeline.Workspace)/docker-images/backend.tar"
-
-              docker load \
-                --input "$(Pipeline.Workspace)/docker-images/frontend.tar"
-
-              echo "Docker images loaded successfully"
-
-              docker images | grep "shopnestdevacr2.azurecr.io/shopnest-"
-            displayName: "Load Scanned Docker Images"
-
-          - task: Docker@2
-            displayName: "Login to Azure Container Registry"
-            inputs:
-              command: "login"
-              containerRegistry: "sc-shopnest-azure"
-
-          - script: |
-              set -e
+        # Authenticate to Azure using OIDC
+        - task: AzureCLI@2
+          displayName: "Login to Azure and Push Images"
+          inputs:
+            azureSubscription: "sc-shopnest-azure"
+            scriptType: "bash"
+            scriptLocation: "inlineScript"
+            inlineScript: |
+              set -euo pipefail
 
               VERSION="1.0.$(Build.BuildId)"
+              ACR_NAME="shopnestdevacr2"
+              ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
 
-              echo "Pushing approved images..."
-              echo "Version: $VERSION"
+              BACKEND_IMAGE="${ACR_LOGIN_SERVER}/shopnest-backend:${VERSION}"
+              FRONTEND_IMAGE="${ACR_LOGIN_SERVER}/shopnest-frontend:${VERSION}"
 
-              docker push \
-                shopnestdevacr2.azurecr.io/shopnest-backend:"$VERSION"
+              echo "=============================================="
+              echo "Authenticating to Azure Container Registry"
+              echo "=============================================="
 
-              docker push \
-                shopnestdevacr2.azurecr.io/shopnest-frontend:"$VERSION"
+              az acr login --name "$ACR_NAME"
 
-              echo "Images pushed successfully to ACR"
+              echo "Pushing backend image:"
+              echo "$BACKEND_IMAGE"
 
-            displayName: "Push Backend and Frontend Images"
+              docker push "$BACKEND_IMAGE"
+
+              echo "Pushing frontend image:"
+              echo "$FRONTEND_IMAGE"
+
+              docker push "$FRONTEND_IMAGE"
+
+              echo "=============================================="
+              echo "Images pushed successfully"
+              echo "=============================================="
+
+              echo "$BACKEND_IMAGE"
+              echo "$FRONTEND_IMAGE"
