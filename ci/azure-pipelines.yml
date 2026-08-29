@@ -113,3 +113,46 @@ stages:
           displayName: "Publish SonarCloud Quality Gate"
           inputs:
             pollingTimeoutSec: "300"
+
+  # ============================================================
+  # Stage 4: Docker Build
+  # ============================================================
+  - stage: DockerBuild
+    displayName: "Build Docker Images"
+
+    dependsOn: CodeQuality
+    condition: succeeded()
+
+    jobs:
+      - job: BuildImages
+        displayName: "Build Backend and Frontend Images"
+
+        steps:
+          - checkout: self
+
+          - script: |
+              set -e
+
+              BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+              VERSION="1.0.$(Build.BuildId)"
+
+              echo "Building ShopNest Docker images"
+              echo "Version: $VERSION"
+
+              docker build \
+                --build-arg BUILD_DATE="$BUILD_DATE" \
+                --build-arg VERSION="$VERSION" \
+                -t shopnestdevacr2.azurecr.io/shopnest-backend:"$VERSION" \
+                ./backend
+
+              docker build \
+                --build-arg BUILD_DATE="$BUILD_DATE" \
+                --build-arg VERSION="$VERSION" \
+                -t shopnestdevacr2.azurecr.io/shopnest-frontend:"$VERSION" \
+                ./frontend
+
+              echo "Docker images built successfully:"
+              docker images \
+                shopnestdevacr2.azurecr.io/shopnest-backend:"$VERSION" \
+                shopnestdevacr2.azurecr.io/shopnest-frontend:"$VERSION"
+            displayName: "Build Backend and Frontend Docker Images"
