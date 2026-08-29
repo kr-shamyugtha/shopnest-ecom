@@ -102,11 +102,9 @@ stages:
           displayName: "Prepare SonarCloud Analysis"
           inputs:
             SonarCloud: "SonarCloud-ShopNest"
-            organization: "YOUR_SONARCLOUD_ORGANIZATION"
+            organization: "kr-shamyugtha"
             scannerMode: "CLI"
-            configMode: "manual"
-            cliProjectKey: "YOUR_PROJECT_KEY"
-            cliProjectName: "ShopNest"
+            configMode: "file"
 
         - task: SonarCloudAnalyze@3
           displayName: "Run SonarCloud Analysis"
