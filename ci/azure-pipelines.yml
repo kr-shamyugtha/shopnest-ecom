@@ -152,5 +152,6 @@ stages:
                 ./frontend
 
               echo "Docker images built successfully:"
-              docker images | grep "shopnestdevacr2.azurecr.io/shopnest"
+              docker images "shopnestdevacr2.azurecr.io/shopnest-backend:$VERSION"
+              docker images "shopnestdevacr2.azurecr.io/shopnest-frontend:$VERSION"
             displayName: "Build Backend and Frontend Docker Images"
