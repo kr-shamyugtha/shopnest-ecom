@@ -5,6 +5,9 @@ resource "azurerm_kubernetes_cluster" "this" {
   dns_prefix = "${var.project_name}-${var.environment}-aks"
   kubernetes_version  = var.kubernetes_version
 
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
+
   default_node_pool {
     name           = "system"
     node_count     = var.node_count
