@@ -83,35 +83,35 @@ stages:
             displayName: "Build Frontend"
             
   # ============================================================
-  # Stage 3: SonarQube
+  # Stage 3: SonarCloud Code Quality
   # ============================================================
-  - stage: SonarQube
-    displayName: "SonarQube Analysis"
+  - stage: CodeQuality
+    displayName: "SonarCloud Code Quality"
 
-    dependsOn: Test
+    dependsOn: Build
     condition: succeeded()
 
     jobs:
+    - job: SonarCloudAnalysis
+      displayName: "SonarCloud Analysis"
 
-      - job: CodeQuality
-        displayName: "Code Quality Analysis"
+      steps:
+        - checkout: self
 
-        steps:
+        - task: SonarCloudPrepare@3
+          displayName: "Prepare SonarCloud Analysis"
+          inputs:
+            SonarCloud: "SonarCloud-ShopNest"
+            organization: "YOUR_SONARCLOUD_ORGANIZATION"
+            scannerMode: "CLI"
+            configMode: "manual"
+            cliProjectKey: "YOUR_PROJECT_KEY"
+            cliProjectName: "ShopNest"
 
-          - checkout: self
-            displayName: "Checkout Source Code"
+        - task: SonarCloudAnalyze@3
+          displayName: "Run SonarCloud Analysis"
 
-          - task: SonarQubePrepare@7
-            displayName: "Prepare SonarQube Analysis"
-            inputs:
-              SonarQube: "SonarCloud-ShopNest"
-              scannerMode: "CLI"
-              configMode: "file"
-
-          - task: SonarQubeAnalyze@7
-            displayName: "Run SonarQube Analysis"
-
-          - task: SonarQubePublish@7
-            displayName: "Publish Quality Gate"
-            inputs:
-              pollingTimeoutSec: "300"
+        - task: SonarCloudPublish@3
+          displayName: "Publish SonarCloud Quality Gate"
+          inputs:
+            pollingTimeoutSec: "300"
