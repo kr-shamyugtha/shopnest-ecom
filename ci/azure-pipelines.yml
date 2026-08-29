@@ -1,3 +1,119 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+
+  # ============================================================
+  # Stage 1: Test
+  # ============================================================
+  - stage: Test
+    displayName: "Run Tests"
+
+    jobs:
+
+      - job: ApplicationTests
+        displayName: "Backend and Frontend Tests"
+
+        steps:
+
+          - checkout: self
+            displayName: "Checkout Source Code"
+
+          - task: UseNode@1
+            displayName: "Install Node.js"
+            inputs:
+              version: "20.x"
+
+          - script: |
+              cd backend
+              npm ci
+              npm test -- --ci
+            displayName: "Run Backend Tests"
+
+          - script: |
+              cd frontend
+              npm ci
+              npm test -- --watchAll=false
+            displayName: "Run Frontend Tests"
+
+
+  # ============================================================
+  # Stage 2: Build
+  # ============================================================
+  - stage: Build
+    displayName: "Build Application"
+
+    dependsOn: Test
+    condition: succeeded()
+
+    jobs:
+
+      - job: ApplicationBuild
+        displayName: "Build Frontend"
+
+        steps:
+
+          - checkout: self
+            displayName: "Checkout Source Code"
+
+          - task: UseNode@1
+            displayName: "Install Node.js"
+            inputs:
+              version: "20.x"
+
+          - script: |
+              cd backend
+              npm ci
+            displayName: "Install Backend Dependencies"
+
+          - script: |
+              cd frontend
+              npm ci
+              npm run build
+            displayName: "Build Frontend"
+            
+  # ============================================================
+  # Stage 3: SonarCloud Code Quality
+  # ============================================================
+  - stage: CodeQuality
+    displayName: "SonarCloud Code Quality"
+
+    dependsOn: Build
+    condition: succeeded()
+
+    jobs:
+    - job: SonarCloudAnalysis
+      displayName: "SonarCloud Analysis"
+
+      steps:
+        - checkout: self
+
+        - task: SonarCloudPrepare@3
+          displayName: "Prepare SonarCloud Analysis"
+          inputs:
+            SonarCloud: "SonarCloud-ShopNest"
+            organization: "kr-shamyugtha"
+            scannerMode: "CLI"
+            configMode: "file"
+
+        - task: SonarCloudAnalyze@3
+          displayName: "Run SonarCloud Analysis"
+
+        - task: SonarCloudPublish@3
+          displayName: "Publish SonarCloud Quality Gate"
+          inputs:
+            pollingTimeoutSec: "300"
+
   # ============================================================
   # Stage 4: Docker Build
   # ============================================================
