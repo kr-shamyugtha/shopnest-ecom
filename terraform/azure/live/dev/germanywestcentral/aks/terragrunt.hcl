@@ -44,6 +44,9 @@ inputs = {
   resource_group_name  = dependency.resource_group.outputs.name
   subnet_id            = dependency.networking.outputs.aks_subnet_id
   acr_id = dependency.acr.outputs.id
+  admin_group_object_ids = [
+  "bb200924-909c-46ff-9ae7-a282264ccc6a"
+]
   node_count           = 2
   vm_size              = "Standard_D2s_v7"
   tags = {

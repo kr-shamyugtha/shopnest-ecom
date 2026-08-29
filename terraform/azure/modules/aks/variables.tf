@@ -41,3 +41,13 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "admin_group_object_ids" {
+  description = "Microsoft Entra ID group object IDs with AKS administrator access."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.admin_group_object_ids) > 0
+    error_message = "At least one Microsoft Entra admin group must be configured."
+  }
+}

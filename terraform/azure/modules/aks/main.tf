@@ -7,6 +7,12 @@ resource "azurerm_kubernetes_cluster" "this" {
 
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
+  local_account_disabled = true
+
+  azure_active_directory_role_based_access_control {
+  azure_rbac_enabled    = true
+  admin_group_object_ids = var.admin_group_object_ids
+}
 
   default_node_pool {
     name           = "system"
