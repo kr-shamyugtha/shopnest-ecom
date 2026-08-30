@@ -21,7 +21,7 @@ resource "azurerm_kubernetes_cluster" "this" {
     vnet_subnet_id = var.subnet_id
 
     upgrade_settings {
-      max_surge = "10%"
+      max_surge = "1"
     }
   }
 
@@ -33,10 +33,10 @@ resource "azurerm_kubernetes_cluster" "this" {
     type = "SystemAssigned"
   }
 
-  network_profile {
-    network_plugin    = "azure"
-    load_balancer_sku = "standard"
-  }
+ network_profile {
+  network_plugin    = "azure"
+  load_balancer_sku = "standard"
+}
 
   key_vault_secrets_provider {
     secret_rotation_enabled = true
