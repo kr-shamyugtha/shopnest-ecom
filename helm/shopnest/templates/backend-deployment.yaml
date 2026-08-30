@@ -28,8 +28,11 @@ spec:
         app.kubernetes.io/name: shopnest-backend
         app.kubernetes.io/part-of: shopnest
         app.kubernetes.io/component: backend
+        azure.workload.identity/use: "true"
 
     spec:
+      serviceAccountName: {{ .Values.workloadIdentity.serviceAccountName }}
+
       containers:
         - name: backend
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
@@ -43,15 +46,16 @@ spec:
             - secretRef:
                 name: shopnest-backend-secret
             {{- end }}
+
             - configMapRef:
                 name: shopnest-backend-config
 
-{{- if .Values.secrets.enabled }}
+          {{- if .Values.secrets.enabled }}
           volumeMounts:
             - name: secrets-store
               mountPath: /mnt/secrets-store
               readOnly: true
-{{- end }}
+          {{- end }}
 
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
@@ -74,7 +78,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
 
-{{- if .Values.secrets.enabled }}
+      {{- if .Values.secrets.enabled }}
       volumes:
         - name: secrets-store
           csi:
@@ -82,4 +86,4 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: {{ .Values.secrets.providerClassName }}
-{{- end }}
+      {{- end }}

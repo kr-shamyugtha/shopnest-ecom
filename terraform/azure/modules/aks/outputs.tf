@@ -24,3 +24,14 @@ output "keyvault_secrets_provider_object_id" {
   description = "Object ID of the Azure Key Vault Secrets Provider managed identity"
   value       = azurerm_kubernetes_cluster.this.key_vault_secrets_provider[0].secret_identity[0].object_id
 }
+
+
+output "backend_identity_client_id" {
+  description = "Client ID of the ShopNest backend workload identity"
+  value       = azurerm_user_assigned_identity.backend.client_id
+}
+
+output "backend_identity_object_id" {
+  description = "Object ID of the ShopNest backend workload identity"
+  value       = azurerm_user_assigned_identity.backend.principal_id
+}

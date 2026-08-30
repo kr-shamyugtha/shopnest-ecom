@@ -40,3 +40,8 @@ frontend:
 secrets:
   enabled: false
   providerClassName: shopnest-backend
+
+workloadIdentity:
+  enabled: false
+  serviceAccountName: shopnest-backend
+  clientId: ""
