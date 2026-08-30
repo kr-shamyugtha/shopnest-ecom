@@ -467,3 +467,329 @@ stages:
 
                 echo "$BACKEND_IMAGE"
                 echo "$FRONTEND_IMAGE"
+
+  # ============================================================
+  # Stage 7: Deploy to AKS
+  # ============================================================
+  - stage: DeployToAKS
+    displayName: "Deploy to AKS"
+
+    dependsOn: PushToACR
+    condition: succeeded()
+
+    jobs:
+      - job: Deploy
+        displayName: "Helm Deploy to AKS"
+
+        steps:
+
+          - checkout: self
+            displayName: "Checkout Source Code"
+
+          # ----------------------------------------------------
+          # Authenticate to Azure using the existing OIDC
+          # service connection and install kubelogin
+          # ----------------------------------------------------
+          - task: AzureCLI@2
+            displayName: "Authenticate to Azure (OIDC) and Install kubelogin"
+            inputs:
+              azureSubscription: "sc-shopnest-azure"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                az account show --output table
+
+                echo "=============================================="
+                echo "Installing kubectl and kubelogin"
+                echo "=============================================="
+
+                # Install kubectl
+                sudo az aks install-cli
+
+                # Install kubelogin (kubelogin authenticates against
+                # AKS that has local accounts disabled, using AAD)
+                if ! command -v kubelogin >/dev/null 2>&1; then
+                  KUBELOGIN_VERSION=$(curl -s \
+                    "https://api.github.com/repos/Azure/kubelogin/releases/latest" \
+                    | grep '"tag_name"' | cut -d '"' -f 4)
+                  echo "Installing kubelogin $KUBELOGIN_VERSION"
+                  wget -q \
+                    "https://github.com/Azure/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin-linux-amd64.zip" \
+                    -O /tmp/kubelogin.zip
+                  sudo unzip -o /tmp/kubelogin.zip -d /usr/local/bin
+                  sudo chmod +x /usr/local/bin/kubelogin
+                  rm -f /tmp/kubelogin.zip
+                fi
+
+                kubectl version --client
+                kubelogin version
+
+          # ----------------------------------------------------
+          # Get AKS credentials and verify cluster connectivity
+          # ----------------------------------------------------
+          - task: AzureCLI@2
+            displayName: "Get AKS Credentials and Verify Cluster"
+            inputs:
+              azureSubscription: "sc-shopnest-azure"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                RESOURCE_GROUP="shopnest-dev-rg"
+                CLUSTER_NAME="shopnest-dev-aks"
+                NAMESPACE="shopnest"
+
+                echo "=============================================="
+                echo "Getting AKS credentials for ${CLUSTER_NAME}"
+                echo "=============================================="
+
+                # Get credentials and force kubelogin-based auth
+                # (required because local accounts are disabled)
+                az aks get-credentials \
+                --resource-group "$RESOURCE_GROUP" \
+                --name "$CLUSTER_NAME" \
+                --overwrite-existing
+
+                kubelogin convert-kubeconfig -l azurecli
+
+                # Ensure the kubelogin interceptor is used
+                KUBECONFIG="$HOME/.kube/config"
+                if ! grep -q "kubelogin" "$KUBECONFIG"; then
+                  echo "kubelogin not configured in kubeconfig, adding executor..."
+                  # Verify the pluggable exec is present after forcing credential mode
+                  kubelogin convert-kubeconfig -l azurecli
+                fi
+
+                # Verify connectivity
+                echo "Clusters available:"
+                kubectl config get-contexts
+                echo ""
+                echo "Cluster nodes:"
+                kubectl get nodes -o wide
+
+                # Verify target namespace exists
+                if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+                  echo "Namespace '$NAMESPACE' exists."
+                else
+                  echo "Namespace '$NAMESPACE' does not exist. Skipping (will be managed by Helm/ArgoCD)."
+                fi
+
+          # ----------------------------------------------------
+          # Deploy / upgrade the Helm chart with values-azure.yaml
+          # ----------------------------------------------------
+          - task: AzureCLI@2
+            displayName: "Helm Deploy to AKS"
+            inputs:
+              azureSubscription: "sc-shopnest-azure"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                RESOURCE_GROUP="shopnest-dev-rg"
+                CLUSTER_NAME="shopnest-dev-aks"
+                NAMESPACE="shopnest"
+                VERSION="1.0.$(Build.BuildId)"
+
+                az aks get-credentials \
+                --resource-group "$RESOURCE_GROUP" \
+                --name "$CLUSTER_NAME" \
+                --overwrite-existing
+
+                kubelogin convert-kubeconfig -l azurecli
+
+                # Ensure the kubeconfig uses kubelogin AAD auth
+                if ! kubelogin convert-kubeconfig -l azurecli >/dev/null 2>&1; then
+                  echo "kubelogin convert-kubeconfig already applied or not needed"
+                fi
+
+                # Ensure the namespace exists
+                kubectl get namespace "$NAMESPACE" >/dev/null 2>&1 || \
+                  kubectl create namespace "$NAMESPACE"
+
+                echo "=============================================="
+                echo "Deploying ShopNest Helm chart (version $VERSION)"
+                echo "=============================================="
+
+                helm dependency build ./helm/shopnest || true
+
+                helm upgrade --install shopnest ./helm/shopnest \
+                  --namespace "$NAMESPACE" \
+                  --create-namespace \
+                  --values ./helm/shopnest/values-azure.yaml \
+                  --set backend.image.repository=shopnestdevacr2.azurecr.io/shopnest-backend \
+                  --set backend.image.tag="$VERSION" \
+                  --set frontend.image.repository=shopnestdevacr2.azurecr.io/shopnest-frontend \
+                  --set frontend.image.tag="$VERSION" \
+                  --wait \
+                  --timeout 10m
+
+                echo ""
+                echo "Helm release status:"
+                helm status shopnest --namespace "$NAMESPACE"
+
+          # ----------------------------------------------------
+          # Wait for rollout to complete (fails if not healthy)
+          # ----------------------------------------------------
+          - task: AzureCLI@2
+            displayName: "Wait for Deployment Rollouts"
+            inputs:
+              azureSubscription: "sc-shopnest-azure"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                RESOURCE_GROUP="shopnest-dev-rg"
+                CLUSTER_NAME="shopnest-dev-aks"
+                NAMESPACE="shopnest"
+
+                az aks get-credentials \
+                --resource-group "$RESOURCE_GROUP" \
+                --name "$CLUSTER_NAME" \
+                --overwrite-existing
+
+                kubelogin convert-kubeconfig -l azurecli
+
+                kubelogin convert-kubeconfig -l azurecli >/dev/null 2>&1 || true
+
+                echo "=============================================="
+                echo "Waiting for backend rollout to complete"
+                echo "=============================================="
+
+                # Exit non-zero on failure, which fails the pipeline
+                kubectl rollout status deployment/shopnest-backend \
+                  --namespace "$NAMESPACE" \
+                  --timeout=300s
+
+                echo "=============================================="
+                echo "Waiting for frontend rollout to complete"
+                echo "=============================================="
+
+                kubectl rollout status deployment/shopnest-frontend \
+                  --namespace "$NAMESPACE" \
+                  --timeout=300s
+
+                echo ""
+                echo "Both deployments rolled out successfully."
+
+          # ----------------------------------------------------
+          # Verify deployment health (pods, replicas, readiness)
+          # ----------------------------------------------------
+          - task: AzureCLI@2
+            displayName: "Verify Deployment Health"
+            inputs:
+              azureSubscription: "sc-shopnest-azure"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                RESOURCE_GROUP="shopnest-dev-rg"
+                CLUSTER_NAME="shopnest-dev-aks"
+                NAMESPACE="shopnest"
+
+                az aks get-credentials \
+                --resource-group "$RESOURCE_GROUP" \
+                --name "$CLUSTER_NAME" \
+                --overwrite-existing
+
+                kubelogin convert-kubeconfig -l azurecli
+
+                kubelogin convert-kubeconfig -l azurecli >/dev/null 2>&1 || true
+
+                echo "=============================================="
+                echo "Deployments"
+                echo "=============================================="
+                kubectl get deployments -n "$NAMESPACE"
+
+                echo ""
+                echo "Checking deployment availability..."
+                for DEPLOYMENT in shopnest-backend shopnest-frontend; do
+                  AVAILABLE=$(kubectl get deployment "$DEPLOYMENT" \
+                    -n "$NAMESPACE" \
+                    -o jsonpath='{.status.availableReplicas}')
+                  DESIRED=$(kubectl get deployment "$DEPLOYMENT" \
+                    -n "$NAMESPACE" \
+                    -o jsonpath='{.spec.replicas}')
+
+                  echo "${DEPLOYMENT}: available=$AVAILABLE desired=$DESIRED"
+
+                  if [ "${AVAILABLE:-0}" -lt "${DESIRED:-1}" ]; then
+                    echo "ERROR: $DEPLOYMENT is not healthy (available=$AVAILABLE, desired=$DESIRED)"
+                    exit 1
+                  fi
+                done
+
+                echo ""
+                echo "=============================================="
+                echo "Pods"
+                echo "=============================================="
+                kubectl get pods -n "$NAMESPACE" -o wide
+
+                echo ""
+                echo "Checking pod readiness..."
+                NOT_READY=$(kubectl get pods -n "$NAMESPACE" \
+                  --field-selector=status.phase=Running \
+                  -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[*].ready}{"\n"}{end}' \
+                  | grep -c "false" || true)
+
+                if [ "$NOT_READY" -gt 0 ]; then
+                  echo "ERROR: $NOT_READY pod(s) are not ready."
+                  exit 1
+                fi
+
+                echo ""
+                echo "=============================================="
+                echo "Services"
+                echo "=============================================="
+                kubectl get svc -n "$NAMESPACE"
+
+                echo ""
+                echo "=============================================="
+                echo "Ingress"
+                echo "=============================================="
+                kubectl get ingress -n "$NAMESPACE"
+
+                echo ""
+                echo "=============================================="
+                echo "Service endpoints (backing pods)"
+                echo "=============================================="
+
+                # Confirm the services have ready backend pods behind
+                # them. This verifies application connectivity without
+                # provisioning any additional capacity.
+                for SVC in backend shopnest-frontend; do
+                  ENDPOINT_COUNT=$(kubectl get endpoints "$SVC" \
+                    -n "$NAMESPACE" \
+                    -o jsonpath='{.subsets[0].addresses}' \
+                    | tr ',' '\n' | grep -c . || true)
+
+                  echo "${SVC}: ready endpoints=$ENDPOINT_COUNT"
+
+                  if [ "${ENDPOINT_COUNT:-0}" -lt 1 ]; then
+                    echo "ERROR: Service $SVC has no ready endpoints."
+                    exit 1
+                  fi
+                done
+
+                echo ""
+                echo "=============================================="
+                echo "Application health check (via readiness/liveness)"
+                echo "=============================================="
+
+                # The readiness/liveness probes already hit /health on
+                # every replica; the rollout + availability + pod
+                # readiness checks above confirm the application is
+                # serving healthy responses. Re-assert final state:
+                kubectl get events \
+                  --namespace "$NAMESPACE" \
+                  --field-selector type=Warning \
+                  --sort-by=.lastTimestamp \
+                  | tail -20 || true
+
+                echo ""
+                echo "Deployment health verification passed."

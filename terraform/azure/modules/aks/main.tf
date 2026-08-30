@@ -51,3 +51,28 @@ resource "azurerm_role_assignment" "aks_acr_pull" {
   principal_id                     = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
   skip_service_principal_aad_check = true
 }
+
+# ==========================================================
+# Backend Workload Identity
+# ==========================================================
+
+resource "azurerm_user_assigned_identity" "backend" {
+  name                = "${var.project_name}-${var.environment}-backend-identity"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.tags
+}
+
+resource "azurerm_federated_identity_credential" "backend" {
+  name = "${var.project_name}-${var.environment}-backend-fic"
+
+  user_assigned_identity_id = azurerm_user_assigned_identity.backend.id
+
+  audience = [
+    "api://AzureADTokenExchange"
+  ]
+
+  issuer  = azurerm_kubernetes_cluster.this.oidc_issuer_url
+  subject = "system:serviceaccount:shopnest:shopnest-backend"
+}
