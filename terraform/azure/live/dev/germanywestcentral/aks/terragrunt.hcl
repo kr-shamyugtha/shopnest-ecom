@@ -30,7 +30,7 @@ dependency "networking" {
 }
 
 dependency "acr" {
-  config_path = "../acr"
+  config_path = "../../../shared/germanywestcentral/acr"
   mock_outputs = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/acr"
   }
