@@ -32,9 +32,28 @@ variable "node_count" {
   default = 1
 }
 
+variable "enable_auto_scaling" {
+  type    = bool
+  default = false
+}
+
+variable "min_count" {
+  type    = number
+  default = null
+}
+
+variable "max_count" {
+  type    = number
+  default = null
+}
+
 variable "vm_size" {
   type    = string
   default = "Standard_D2s_v7"
+}
+
+variable "log_analytics_workspace_id" {
+  type = string
 }
 
 variable "tags" {

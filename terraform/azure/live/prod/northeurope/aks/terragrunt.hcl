@@ -16,7 +16,7 @@ dependency "resource_group" {
   config_path = "../resource-group"
   mock_outputs = {
     name     = "mock-rg"
-    location = "germanywestcentral"
+    location = "northeurope"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -29,8 +29,9 @@ dependency "networking" {
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
+# ACR is shared across all environments and lives in the dev resource group.
 dependency "acr" {
-  config_path = "../acr"
+  config_path = "../../../dev/germanywestcentral/acr"
   mock_outputs = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/acr"
   }
@@ -46,18 +47,18 @@ dependency "monitoring" {
 }
 
 inputs = {
-  project_name         = local.project_name
-  environment         = local.environment
-  location             = dependency.resource_group.outputs.location
-  resource_group_name  = dependency.resource_group.outputs.name
-  subnet_id            = dependency.networking.outputs.aks_subnet_id
-  acr_id = dependency.acr.outputs.id
-  log_analytics_workspace_id = dependency.monitoring.outputs.workspace_id
+  project_name                = local.project_name
+  environment                 = local.environment
+  location                    = dependency.resource_group.outputs.location
+  resource_group_name         = dependency.resource_group.outputs.name
+  subnet_id                   = dependency.networking.outputs.aks_subnet_id
+  acr_id                      = dependency.acr.outputs.id
+  log_analytics_workspace_id  = dependency.monitoring.outputs.workspace_id
   admin_group_object_ids = [
-  "bb200924-909c-46ff-9ae7-a282264ccc6a"
-]
-  node_count           = 1
-  vm_size              = "Standard_D2s_v7"
+    "bb200924-909c-46ff-9ae7-a282264ccc6a"
+  ]
+  node_count = 1
+  vm_size    = "Standard_D2s_v7"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

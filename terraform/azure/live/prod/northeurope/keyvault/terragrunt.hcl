@@ -16,7 +16,7 @@ dependency "resource_group" {
   config_path = "../resource-group"
   mock_outputs = {
     name     = "mock-rg"
-    location = "germanywestcentral"
+    location = "northeurope"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -35,7 +35,7 @@ inputs = {
   location                    = dependency.resource_group.outputs.location
   resource_group_name         = dependency.resource_group.outputs.name
   backend_identity_object_id  = dependency.aks.outputs.backend_identity_object_id
-  key_vault_name = "shopnest-dev-kv2"
+  key_vault_name              = "shopnest-prod-kv"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

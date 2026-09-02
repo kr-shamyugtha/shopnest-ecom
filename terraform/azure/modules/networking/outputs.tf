@@ -5,3 +5,7 @@ output "vnet_id" {
 output "aks_subnet_id" {
   value = azurerm_subnet.aks.id
 }
+
+output "aks_nsg_id" {
+  value = azurerm_network_security_group.aks.id
+}

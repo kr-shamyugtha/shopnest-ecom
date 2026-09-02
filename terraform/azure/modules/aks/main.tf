@@ -8,6 +8,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
   local_account_disabled = true
+  azure_policy_enabled      = true
 
   azure_active_directory_role_based_access_control {
   azure_rbac_enabled    = true
@@ -16,9 +17,13 @@ resource "azurerm_kubernetes_cluster" "this" {
 
   default_node_pool {
     name           = "system"
-    node_count     = var.node_count
     vm_size        = var.vm_size
     vnet_subnet_id = var.subnet_id
+
+    auto_scaling_enabled = var.enable_auto_scaling
+    node_count           = var.enable_auto_scaling ? null : var.node_count
+    min_count            = var.enable_auto_scaling ? var.min_count : null
+    max_count            = var.enable_auto_scaling ? var.max_count : null
 
     upgrade_settings {
       max_surge = "1"
@@ -35,12 +40,19 @@ resource "azurerm_kubernetes_cluster" "this" {
 
  network_profile {
   network_plugin    = "azure"
+  network_policy    = "azure"
   load_balancer_sku = "standard"
 }
 
   key_vault_secrets_provider {
     secret_rotation_enabled = true
   }
+
+  oms_agent {
+    log_analytics_workspace_id = var.log_analytics_workspace_id
+  }
+
+  monitor_metrics {}
 
   tags = var.tags
 }
