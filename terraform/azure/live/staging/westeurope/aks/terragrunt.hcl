@@ -29,9 +29,9 @@ dependency "networking" {
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
-# ACR is shared across all environments and lives in the dev resource group.
+# ACR is shared across all environments and has its own independent lifecycle.
 dependency "acr" {
-  config_path = "../../../dev/germanywestcentral/acr"
+  config_path = "../../../shared/germanywestcentral/acr"
   mock_outputs = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/acr"
   }
