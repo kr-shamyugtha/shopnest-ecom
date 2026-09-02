@@ -13,10 +13,10 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled = true
 }
 
-resource "azurerm_role_assignment" "aks_secrets_reader" {
+resource "azurerm_role_assignment" "backend_secrets_reader" {
   scope                = azurerm_key_vault.this.id
   role_definition_name = "Key Vault Secrets User"
-  principal_id          = var.aks_kubelet_identity_object_id
+  principal_id          = var.backend_identity_object_id
 }
 
 resource "azurerm_role_assignment" "self_secrets_officer" {
