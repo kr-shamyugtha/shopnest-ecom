@@ -9,14 +9,14 @@ locals {
 }
 
 terraform {
-  source = "${get_repo_root()}/terraform/azure/modules//monitoring"
+  source = "${get_repo_root()}/terraform/azure/modules//networking"
 }
 
 dependency "resource_group" {
   config_path = "../resource-group"
   mock_outputs = {
     name     = "mock-rg"
-    location = "northeurope"
+    location = "eastus"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }

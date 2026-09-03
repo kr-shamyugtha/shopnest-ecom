@@ -4,6 +4,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   resource_group_name = var.resource_group_name
   dns_prefix = "${var.project_name}-${var.environment}-aks"
   kubernetes_version  = var.kubernetes_version
+  sku_tier            = var.sku_tier
 
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
@@ -26,7 +27,7 @@ resource "azurerm_kubernetes_cluster" "this" {
     max_count            = var.enable_auto_scaling ? var.max_count : null
 
     upgrade_settings {
-      max_surge = "1"
+      max_surge = var.upgrade_max_surge
     }
   }
 
@@ -55,6 +56,26 @@ resource "azurerm_kubernetes_cluster" "this" {
   monitor_metrics {}
 
   tags = var.tags
+}
+
+# ==========================================================
+# CI/CD Pipeline Access (narrower than admin_group_object_ids)
+# ==========================================================
+
+resource "azurerm_role_assignment" "ci_aks_cluster_user" {
+  count = var.ci_principal_id != null ? 1 : 0
+
+  scope                = azurerm_kubernetes_cluster.this.id
+  role_definition_name = "Azure Kubernetes Service Cluster User Role"
+  principal_id         = var.ci_principal_id
+}
+
+resource "azurerm_role_assignment" "ci_aks_rbac_writer" {
+  count = var.ci_principal_id != null ? 1 : 0
+
+  scope                = azurerm_kubernetes_cluster.this.id
+  role_definition_name = "Azure Kubernetes Service RBAC Writer"
+  principal_id         = var.ci_principal_id
 }
 
 resource "azurerm_role_assignment" "aks_acr_pull" {
@@ -86,5 +107,5 @@ resource "azurerm_federated_identity_credential" "backend" {
   ]
 
   issuer  = azurerm_kubernetes_cluster.this.oidc_issuer_url
-  subject = "system:serviceaccount:shopnest:shopnest-backend"
+  subject = "system:serviceaccount:${var.workload_namespace}:${var.workload_service_account}"
 }

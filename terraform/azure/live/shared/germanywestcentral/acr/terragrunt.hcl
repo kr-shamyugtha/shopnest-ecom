@@ -24,10 +24,10 @@ dependency "resource_group" {
 
 inputs = {
   name                = "shopnestdevacr2"
-  project_name        = local.project_name
-  environment         = local.environment
   location            = dependency.resource_group.outputs.location
   resource_group_name = dependency.resource_group.outputs.name
+  # sc-shopnest-azure Azure DevOps service connection's service principal
+  ci_principal_id = "8b108a77-54ef-4512-9f0b-2eb97c02ac68"
 
   tags = {
     ManagedBy   = "terraform"

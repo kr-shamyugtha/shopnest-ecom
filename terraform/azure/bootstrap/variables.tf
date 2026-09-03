@@ -25,7 +25,6 @@ variable "resource_group_name" {
 variable "storage_account_name" {
   description = "Globally unique name for the storage account (lowercase letters/numbers only, no hyphens)"
   type        = string
-  default     = "shopnesttfstate001"
 }
 
 variable "container_name" {
@@ -48,9 +47,8 @@ variable "tags" {
   description = "Tags applied to all resources in this module"
   type        = map(string)
   default = {
-    ManagedBy   = "terraform"
-    Environment = "dev"
-    Purpose     = "terraform-state-backend"
+    ManagedBy = "terraform"
+    Purpose   = "terraform-state-backend"
   }
 }
 

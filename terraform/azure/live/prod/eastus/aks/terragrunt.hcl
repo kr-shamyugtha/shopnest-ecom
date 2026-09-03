@@ -16,7 +16,7 @@ dependency "resource_group" {
   config_path = "../resource-group"
   mock_outputs = {
     name     = "mock-rg"
-    location = "northeurope"
+    location = "eastus"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -57,8 +57,16 @@ inputs = {
   admin_group_object_ids = [
     "bb200924-909c-46ff-9ae7-a282264ccc6a"
   ]
-  node_count = 1
-  vm_size    = "Standard_D2s_v7"
+  enable_auto_scaling = true
+  min_count           = 2
+  max_count           = 2
+  vm_size             = "Standard_D2s_v7"
+  kubernetes_version  = "1.35"
+  sku_tier            = "Standard"
+
+  # 2 nodes already uses the full 4 vCPU regional quota in eastus, so there's
+  # no headroom for a surge node during upgrades — upgrade in place instead.
+  upgrade_max_surge = "0"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

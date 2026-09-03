@@ -56,9 +56,37 @@ variable "log_analytics_workspace_id" {
   type = string
 }
 
+variable "workload_namespace" {
+  type    = string
+  default = "shopnest"
+}
+
+variable "workload_service_account" {
+  type    = string
+  default = "shopnest-backend"
+}
+
+variable "sku_tier" {
+  description = "AKS control plane SKU tier (Free has no SLA; Standard adds a financially-backed API server SLA)"
+  type        = string
+  default     = "Free"
+}
+
+variable "upgrade_max_surge" {
+  description = "Node pool upgrade surge setting. \"1\" adds a temporary extra node during upgrades (needs quota headroom); \"0\" upgrades in place instead."
+  type        = string
+  default     = "1"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
+}
+
+variable "ci_principal_id" {
+  description = "Object ID of the CI/CD pipeline's service principal, granted just enough access to fetch credentials and deploy workloads (not cluster-admin). Null skips the grant."
+  type        = string
+  default     = null
 }
 
 variable "admin_group_object_ids" {

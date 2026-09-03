@@ -56,8 +56,11 @@ inputs = {
   admin_group_object_ids = [
   "bb200924-909c-46ff-9ae7-a282264ccc6a"
 ]
+  # sc-shopnest-azure Azure DevOps service connection's service principal
+  ci_principal_id = "8b108a77-54ef-4512-9f0b-2eb97c02ac68"
   node_count           = 1
   vm_size              = "Standard_D2s_v7"
+  kubernetes_version   = "1.35"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment
