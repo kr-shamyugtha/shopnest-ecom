@@ -26,4 +26,4 @@ secrets:
 workloadIdentity:
   enabled: true
   serviceAccountName: shopnest-backend
-  clientId: "e65fadb2-0a89-412e-9b1f-17a6cd27210f"
+  clientId: "b29ea2c0-46b0-475f-b9af-feff0c64cb29"

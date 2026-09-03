@@ -1,11 +1,3 @@
-variable "environment" {
-  description = "Deployment environment"
-  type        = string
-}
-variable "project_name" {
-  type = string
-}
-
 variable "location" {
   type = string
 }
@@ -26,4 +18,10 @@ variable "tags" {
 variable "name" {
   description = "Globally unique Azure Container Registry name"
   type        = string
+}
+
+variable "ci_principal_id" {
+  description = "Object ID of the CI/CD pipeline's service principal, granted push access. Null skips the grant."
+  type        = string
+  default     = null
 }

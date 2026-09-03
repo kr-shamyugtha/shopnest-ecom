@@ -57,8 +57,16 @@ inputs = {
   admin_group_object_ids = [
     "bb200924-909c-46ff-9ae7-a282264ccc6a"
   ]
-  node_count = 1
-  vm_size    = "Standard_D2s_v7"
+  enable_auto_scaling = true
+  min_count           = 2
+  max_count           = 2
+  vm_size             = "Standard_D2s_v6"
+  kubernetes_version  = "1.35"
+  sku_tier            = "Standard"
+
+  # 2 nodes already uses the full 4 vCPU regional quota in westeurope, so
+  # there's no headroom for a surge node during upgrades — upgrade in place.
+  upgrade_max_surge = "0"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment
