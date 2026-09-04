@@ -37,9 +37,32 @@ frontend:
 
   razorpayKeyId: ""
 
+cloud:
+  provider: azure
+
 secrets:
   enabled: false
   providerClassName: shopnest-backend
+  k8sSecretName: shopnest-backend-secret
+  items:
+    - key: CLOUDINARY_API_KEY
+      name: CLOUDINARY-API-KEY
+    - key: CLOUDINARY_API_SECRET
+      name: CLOUDINARY-API-SECRET
+    - key: CLOUDINARY_CLOUD_NAME
+      name: CLOUDINARY-CLOUD-NAME
+    - key: GMAIL_PASS
+      name: GMAIL-PASS
+    - key: GMAIL_USER
+      name: GMAIL-USER
+    - key: JWT_SECRET
+      name: JWT-SECRET
+    - key: MONGO_URI
+      name: MONGO-URI
+    - key: RAZORPAY_KEY_ID
+      name: RAZORPAY-KEY-ID
+    - key: RAZORPAY_KEY_SECRET
+      name: RAZORPAY-KEY-SECRET
 
 workloadIdentity:
   enabled: false
