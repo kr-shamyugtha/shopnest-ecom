@@ -36,6 +36,7 @@ inputs = {
   resource_group_name         = dependency.resource_group.outputs.name
   backend_identity_object_id  = dependency.aks.outputs.backend_identity_object_id
   key_vault_name              = "shopnest-prod-kv"
+  enable_delete_lock          = true
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

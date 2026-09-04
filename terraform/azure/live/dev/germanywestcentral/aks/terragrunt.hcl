@@ -58,7 +58,9 @@ inputs = {
 ]
   # sc-shopnest-azure Azure DevOps service connection's service principal
   ci_principal_id = "8b108a77-54ef-4512-9f0b-2eb97c02ac68"
-  node_count           = 1
+  enable_auto_scaling  = true
+  min_count            = 2
+  max_count            = 2
   vm_size              = "Standard_D2s_v7"
   kubernetes_version   = "1.35"
   tags = {

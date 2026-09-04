@@ -64,9 +64,12 @@ inputs = {
   kubernetes_version  = "1.35"
   sku_tier            = "Standard"
 
-  # 2 nodes already uses the full 4 vCPU regional quota in westeurope, so
-  # there's no headroom for a surge node during upgrades — upgrade in place.
-  upgrade_max_surge = "0"
+  # 2 nodes already uses the full 4 vCPU regional quota in westeurope. Azure
+  # rejects max_surge=0 (it requires max_unavailable to be non-zero in that
+  # case, which this provider version can't set), so upgrades default to
+  # max_surge=1 and will need a temporary 3rd node (6 vCPU) — exceeding
+  # quota. Scale down to 1 node before running a Kubernetes version upgrade,
+  # or request a quota increase first. See INFRASTRUCTURE_CHECKLIST.md.
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

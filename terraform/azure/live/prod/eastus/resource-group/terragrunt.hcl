@@ -15,8 +15,9 @@ terraform {
 }
 
 inputs = {
-  name     = "${local.project_name}-${local.environment}-rg"
-  location = local.location
+  name                = "${local.project_name}-${local.environment}-rg"
+  location            = local.location
+  enable_delete_lock  = true
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

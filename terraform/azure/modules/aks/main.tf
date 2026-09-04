@@ -40,9 +40,11 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
  network_profile {
-  network_plugin    = "azure"
-  network_policy    = "azure"
-  load_balancer_sku = "standard"
+  network_plugin      = "azure"
+  network_plugin_mode = "overlay"
+  network_policy      = "azure"
+  pod_cidr            = var.pod_cidr
+  load_balancer_sku   = "standard"
 }
 
   key_vault_secrets_provider {

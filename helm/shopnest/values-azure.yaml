@@ -1,6 +1,6 @@
 backend:
   image:
-    repository: shopnestdevacr2.azurecr.io/shopnest-backend
+    repository: shopnestacr.azurecr.io/shopnest-backend
     tag: "1.0.25"
 
   config:
@@ -10,7 +10,7 @@ backend:
 
 frontend:
   image:
-    repository: shopnestdevacr2.azurecr.io/shopnest-frontend
+    repository: shopnestacr.azurecr.io/shopnest-frontend
     tag: "1.0.25"
 
   razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
@@ -26,4 +26,4 @@ secrets:
 workloadIdentity:
   enabled: true
   serviceAccountName: shopnest-backend
-  clientId: "b29ea2c0-46b0-475f-b9af-feff0c64cb29"
+  clientId: "a8cf6081-632e-4e98-af8b-d0adfc144932"

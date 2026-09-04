@@ -24,3 +24,12 @@ resource "azurerm_role_assignment" "self_secrets_officer" {
   role_definition_name = "Key Vault Secrets Officer"
   principal_id          = data.azurerm_client_config.current.object_id
 }
+
+resource "azurerm_management_lock" "this" {
+  count = var.enable_delete_lock ? 1 : 0
+
+  name       = "${azurerm_key_vault.this.name}-delete-lock"
+  scope      = azurerm_key_vault.this.id
+  lock_level = "CanNotDelete"
+  notes      = "Managed by Terraform - prevents accidental deletion of this Key Vault"
+}
