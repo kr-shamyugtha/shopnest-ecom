@@ -23,7 +23,7 @@ dependency "resource_group" {
 }
 
 inputs = {
-  name                = "shopnestdevacr2"
+  name                = "shopnestacr"
   location            = dependency.resource_group.outputs.location
   resource_group_name = dependency.resource_group.outputs.name
   # sc-shopnest-azure Azure DevOps service connection's service principal

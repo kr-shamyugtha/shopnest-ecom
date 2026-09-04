@@ -28,3 +28,9 @@ variable "key_vault_name" {
   description = "Name of the Azure Key Vault"
   type        = string
 }
+
+variable "enable_delete_lock" {
+  description = "Apply a CanNotDelete Azure resource lock to this Key Vault. Leave false for environments you expect to tear down (e.g. dev)."
+  type        = bool
+  default     = false
+}

@@ -137,8 +137,8 @@ stages:
               BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
               VERSION="1.0.$(Build.BuildId)"
 
-              BACKEND_IMAGE="shopnestdevacr2.azurecr.io/shopnest-backend"
-              FRONTEND_IMAGE="shopnestdevacr2.azurecr.io/shopnest-frontend"
+              BACKEND_IMAGE="shopnestacr.azurecr.io/shopnest-backend"
+              FRONTEND_IMAGE="shopnestacr.azurecr.io/shopnest-frontend"
 
               echo "=========================================="
               echo "Building ShopNest Docker images"
@@ -180,7 +180,7 @@ stages:
               docker image inspect "$BACKEND_IMAGE:$VERSION" > /dev/null
               docker image inspect "$FRONTEND_IMAGE:$VERSION" > /dev/null
 
-              docker images | grep "shopnestdevacr2.azurecr.io/shopnest-"
+              docker images | grep "shopnestacr.azurecr.io/shopnest-"
 
               # ==================================================
               # Save Exact Images for Security Scanning
@@ -266,7 +266,7 @@ stages:
 
               echo ""
               echo "Loaded Docker images:"
-              docker images | grep "shopnestdevacr2.azurecr.io/shopnest-"
+              docker images | grep "shopnestacr.azurecr.io/shopnest-"
             displayName: "Load Docker Images"
 
           # ----------------------------------------------------
@@ -302,7 +302,7 @@ stages:
               set -e
 
               VERSION="1.0.$(Build.BuildId)"
-              BACKEND_IMAGE="shopnestdevacr2.azurecr.io/shopnest-backend:$VERSION"
+              BACKEND_IMAGE="shopnestacr.azurecr.io/shopnest-backend:$VERSION"
 
               echo "================================================"
               echo "Scanning Backend Image"
@@ -326,7 +326,7 @@ stages:
               set -e
 
               VERSION="1.0.$(Build.BuildId)"
-              FRONTEND_IMAGE="shopnestdevacr2.azurecr.io/shopnest-frontend:$VERSION"
+              FRONTEND_IMAGE="shopnestacr.azurecr.io/shopnest-frontend:$VERSION"
 
               echo "================================================"
               echo "Scanning Frontend Image"
@@ -420,7 +420,7 @@ stages:
               echo "Loaded Docker Images"
               echo "=============================================="
 
-              docker images | grep "shopnestdevacr2.azurecr.io/shopnest-"
+              docker images | grep "shopnestacr.azurecr.io/shopnest-"
 
             displayName: "Load Docker Images"
 
@@ -437,7 +437,7 @@ stages:
                 set -euo pipefail
 
                 VERSION="1.0.$(Build.BuildId)"
-                ACR_NAME="shopnestdevacr2"
+                ACR_NAME="shopnestacr"
                 ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
 
                 BACKEND_IMAGE="${ACR_LOGIN_SERVER}/shopnest-backend:${VERSION}"
@@ -620,9 +620,9 @@ stages:
                   --namespace "$NAMESPACE" \
                   --create-namespace \
                   --values ./helm/shopnest/values-azure.yaml \
-                  --set backend.image.repository=shopnestdevacr2.azurecr.io/shopnest-backend \
+                  --set backend.image.repository=shopnestacr.azurecr.io/shopnest-backend \
                   --set backend.image.tag="$VERSION" \
-                  --set frontend.image.repository=shopnestdevacr2.azurecr.io/shopnest-frontend \
+                  --set frontend.image.repository=shopnestacr.azurecr.io/shopnest-frontend \
                   --set frontend.image.tag="$VERSION" \
                   --wait \
                   --timeout 10m

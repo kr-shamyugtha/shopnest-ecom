@@ -55,7 +55,7 @@ inputs = {
   acr_id                      = dependency.acr.outputs.id
   log_analytics_workspace_id  = dependency.monitoring.outputs.workspace_id
   admin_group_object_ids = [
-    "bb200924-909c-46ff-9ae7-a282264ccc6a"
+    "91f40ba8-7d31-44c8-a2f2-371aa2b61e31" # shopnest-aks-admins-prod
   ]
   enable_auto_scaling = true
   min_count           = 2
@@ -64,9 +64,12 @@ inputs = {
   kubernetes_version  = "1.35"
   sku_tier            = "Standard"
 
-  # 2 nodes already uses the full 4 vCPU regional quota in eastus, so there's
-  # no headroom for a surge node during upgrades — upgrade in place instead.
-  upgrade_max_surge = "0"
+  # 2 nodes already uses the full 4 vCPU regional quota in eastus. Azure
+  # rejects max_surge=0 (it requires max_unavailable to be non-zero in that
+  # case, which this provider version can't set), so upgrades default to
+  # max_surge=1 and will need a temporary 3rd node (6 vCPU) — exceeding
+  # quota. Scale down to 1 node before running a Kubernetes version upgrade,
+  # or request a quota increase first. See INFRASTRUCTURE_CHECKLIST.md.
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment
