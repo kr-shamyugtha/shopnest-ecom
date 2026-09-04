@@ -1,3 +1,6 @@
+cloud:
+  provider: azure
+
 backend:
   image:
     repository: shopnestacr.azurecr.io/shopnest-backend

@@ -44,7 +44,7 @@ spec:
           envFrom:
             {{- if .Values.secrets.enabled }}
             - secretRef:
-                name: shopnest-backend-secret
+                name: {{ .Values.secrets.k8sSecretName }}
             {{- end }}
 
             - configMapRef:
