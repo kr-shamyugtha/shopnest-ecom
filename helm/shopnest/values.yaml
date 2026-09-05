@@ -19,6 +19,16 @@ backend:
       cpu: "500m"
       memory: "512Mi"
 
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
 frontend:
   image:
     repository: ""
@@ -36,6 +46,16 @@ frontend:
       memory: "256Mi"
 
   razorpayKeyId: ""
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
 
 cloud:
   provider: azure

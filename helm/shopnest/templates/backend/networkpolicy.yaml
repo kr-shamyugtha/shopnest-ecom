@@ -1,0 +1,27 @@
+# Ingress-only, same reasoning as the NSG egress rules in Terraform: this app
+# talks to several external SaaS APIs (Mongo, Cloudinary, Razorpay, Gmail) on
+# a variety of hosts/ports that a NetworkPolicy can't express any more
+# precisely than an NSG service-tag list can — restricting egress risks the
+# same kind of breakage that was found and reverted at the NSG layer. This
+# still adds real value: once a pod is selected by a NetworkPolicy, traffic
+# not explicitly allowed for the specified policy type is denied, so only
+# Ingress is restricted here — this pod is only reachable on its own port,
+# nothing else, from anywhere. Egress is intentionally left unrestricted.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shopnest-backend
+  labels:
+    app.kubernetes.io/name: shopnest-backend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      app: shopnest-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.backend.port }}

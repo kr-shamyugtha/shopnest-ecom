@@ -9,7 +9,9 @@ metadata:
     app.kubernetes.io/component: backend
 
 spec:
+  {{- if not .Values.backend.autoscaling.enabled }}
   replicas: {{ .Values.backend.replicas }}
+  {{- end }}
 
   strategy:
     type: RollingUpdate
@@ -29,14 +31,38 @@ spec:
         app.kubernetes.io/part-of: shopnest
         app.kubernetes.io/component: backend
         azure.workload.identity/use: "true"
+      annotations:
+        checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
 
     spec:
       serviceAccountName: {{ .Values.workloadIdentity.serviceAccountName }}
+
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: shopnest-backend
 
       containers:
         - name: backend
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
           imagePullPolicy: Always
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
 
           ports:
             - containerPort: {{ .Values.backend.port }}
@@ -50,12 +76,16 @@ spec:
             - configMapRef:
                 name: shopnest-backend-config
 
-          {{- if .Values.secrets.enabled }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: uploads
+              mountPath: /app/uploads
+            {{- if .Values.secrets.enabled }}
             - name: secrets-store
               mountPath: /mnt/secrets-store
               readOnly: true
-          {{- end }}
+            {{- end }}
 
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
@@ -78,12 +108,16 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
 
-      {{- if .Values.secrets.enabled }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: uploads
+          emptyDir: {}
+        {{- if .Values.secrets.enabled }}
         - name: secrets-store
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
               secretProviderClass: {{ .Values.secrets.providerClassName }}
-      {{- end }}
+        {{- end }}

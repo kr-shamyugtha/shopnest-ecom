@@ -1,0 +1,15 @@
+{{- if .Values.backend.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: shopnest-backend
+  labels:
+    app.kubernetes.io/name: shopnest-backend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: backend
+spec:
+  minAvailable: {{ .Values.backend.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: shopnest-backend
+{{- end }}

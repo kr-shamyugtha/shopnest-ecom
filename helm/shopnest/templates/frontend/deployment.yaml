@@ -9,7 +9,9 @@ metadata:
     app.kubernetes.io/component: frontend
 
 spec:
+  {{- if not .Values.frontend.autoscaling.enabled }}
   replicas: {{ .Values.frontend.replicas }}
+  {{- end }}
 
   strategy:
     type: RollingUpdate
@@ -28,12 +30,36 @@ spec:
         app.kubernetes.io/name: shopnest-frontend
         app.kubernetes.io/part-of: shopnest
         app.kubernetes.io/component: frontend
+      annotations:
+        checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
 
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: shopnest-frontend
+
       containers:
         - name: frontend
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: IfNotPresent
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
 
           ports:
             - containerPort: {{ .Values.frontend.port }}
@@ -43,6 +69,12 @@ spec:
               mountPath: /usr/share/nginx/html/config.js
               subPath: config.js
               readOnly: true
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
 
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
@@ -69,3 +101,9 @@ spec:
         - name: frontend-runtime-config
           configMap:
             name: shopnest-frontend-config
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
