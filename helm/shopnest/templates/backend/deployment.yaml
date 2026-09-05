@@ -35,7 +35,13 @@ spec:
         checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
 
     spec:
+      {{- if .Values.workloadIdentity.enabled }}
       serviceAccountName: {{ .Values.workloadIdentity.serviceAccountName }}
+      {{- end }}
+      # Neither container calls the Kubernetes API directly (Key Vault access
+      # goes through workload identity + the CSI driver, not kubectl-style
+      # calls), so there's no reason to auto-mount an API token.
+      automountServiceAccountToken: false
 
       securityContext:
         runAsNonRoot: true
