@@ -616,14 +616,23 @@ stages:
 
                 helm dependency build ./helm/shopnest || true
 
+                # The backend identity's client ID is a generated UUID that
+                # changes whenever Terraform recreates it, so it's never
+                # committed to a values file — fetched live by its
+                # deterministic name instead.
+                BACKEND_IDENTITY_CLIENT_ID=$(az identity show \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --name "shopnest-dev-backend-identity" \
+                  --query clientId -o tsv)
+
                 helm upgrade --install shopnest ./helm/shopnest \
                   --namespace "$NAMESPACE" \
                   --create-namespace \
                   --values ./helm/shopnest/values-azure.yaml \
-                  --set backend.image.repository=shopnestacr.azurecr.io/shopnest-backend \
+                  --values ./helm/shopnest/environments/azure/dev.yaml \
                   --set backend.image.tag="$VERSION" \
-                  --set frontend.image.repository=shopnestacr.azurecr.io/shopnest-frontend \
                   --set frontend.image.tag="$VERSION" \
+                  --set workloadIdentity.clientId="$BACKEND_IDENTITY_CLIENT_ID" \
                   --wait \
                   --timeout 10m
 
