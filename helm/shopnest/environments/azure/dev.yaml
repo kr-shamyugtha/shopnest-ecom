@@ -1,0 +1,12 @@
+backend:
+  image:
+    tag: "1.0.25"
+
+frontend:
+  image:
+    tag: "1.0.25"
+  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+
+secrets:
+  azure:
+    keyvaultName: "shopnest-dev-kv2"

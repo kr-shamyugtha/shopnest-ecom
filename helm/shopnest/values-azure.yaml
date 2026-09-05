@@ -4,7 +4,6 @@ cloud:
 backend:
   image:
     repository: shopnestacr.azurecr.io/shopnest-backend
-    tag: "1.0.25"
 
   config:
     port: "5000"
@@ -14,19 +13,18 @@ backend:
 frontend:
   image:
     repository: shopnestacr.azurecr.io/shopnest-frontend
-    tag: "1.0.25"
-
-  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
 
 secrets:
   enabled: true
   providerClassName: shopnest-backend
 
   azure:
-    keyvaultName: "shopnest-dev-kv2"
     tenantId: "e1e8e860-fa83-475d-ab45-170185504741"
 
 workloadIdentity:
   enabled: true
   serviceAccountName: shopnest-backend
-  clientId: "a8cf6081-632e-4e98-af8b-d0adfc144932"
+  # clientId intentionally not set here — it's a generated UUID that changes
+  # whenever Terraform recreates the backend identity, so it's supplied at
+  # deploy time via `--set` (fetched live via `az identity show`, see
+  # ci/azure-pipelines.yml) rather than committed to any values file.
