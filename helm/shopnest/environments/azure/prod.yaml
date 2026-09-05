@@ -1,0 +1,14 @@
+backend:
+  image:
+    tag: "1.0.25"
+
+frontend:
+  image:
+    tag: "1.0.25"
+  # Still the test key — prod isn't live yet. Replace with a real Razorpay
+  # live key ID once prod actually goes live.
+  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+
+secrets:
+  azure:
+    keyvaultName: "shopnest-prod-kv"
