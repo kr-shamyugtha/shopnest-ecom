@@ -34,6 +34,8 @@ spec:
         checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
 
     spec:
+      automountServiceAccountToken: false
+
       securityContext:
         runAsNonRoot: true
         seccompProfile:
