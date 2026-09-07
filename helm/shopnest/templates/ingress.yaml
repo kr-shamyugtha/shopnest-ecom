@@ -7,12 +7,25 @@ metadata:
 
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
+    {{- end }}
 
 spec:
   ingressClassName: nginx
 
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ required "ingress.host is required when ingress.tls.enabled is true" .Values.ingress.host | quote }}
+      secretName: shopnest-tls
+  {{- end }}
+
   rules:
-    - http:
+    - {{- if .Values.ingress.host }}
+      host: {{ .Values.ingress.host | quote }}
+      {{- end }}
+      http:
         paths:
           - path: /api(/|$)(.*)
             pathType: ImplementationSpecific

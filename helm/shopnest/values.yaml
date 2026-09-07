@@ -57,6 +57,14 @@ frontend:
     enabled: true
     minAvailable: 1
 
+ingress:
+  # Empty by default — an Ingress rule with no host matches any host, which
+  # is the correct default until an environment has a real hostname to set.
+  host: ""
+  tls:
+    enabled: false
+    clusterIssuer: selfsigned-issuer
+
 cloud:
   provider: azure
 

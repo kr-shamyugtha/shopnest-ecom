@@ -10,3 +10,11 @@ frontend:
 secrets:
   azure:
     keyvaultName: "shopnest-dev-kv2"
+
+ingress:
+  # ingress-nginx's LoadBalancer external IP, via the free nip.io wildcard
+  # DNS trick (no real domain owned yet). Update this if the IP ever changes
+  # (e.g. ingress-nginx gets reinstalled).
+  host: "48.201.79.231.nip.io"
+  tls:
+    enabled: true

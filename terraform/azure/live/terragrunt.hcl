@@ -38,6 +38,19 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 5.0"
     }
+    # helm/kubernetes are only actually used by ingress-nginx and
+    # cert-manager, but a module can only have one required_providers block,
+    # and Terragrunt won't let a child unit override this shared, generated
+    # one — so they're declared here for every unit. Harmless for the
+    # modules that don't use them (just an unused provider requirement).
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.0"
+    }
   }
 }
 VERSIONS

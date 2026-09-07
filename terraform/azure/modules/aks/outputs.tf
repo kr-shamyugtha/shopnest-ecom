@@ -30,3 +30,15 @@ output "backend_identity_object_id" {
   description = "Object ID of the ShopNest backend workload identity"
   value       = azurerm_user_assigned_identity.backend.principal_id
 }
+
+output "host" {
+  description = "AKS API server endpoint, for configuring Terraform's kubernetes/helm providers"
+  value       = azurerm_kubernetes_cluster.this.kube_config[0].host
+  sensitive   = true
+}
+
+output "cluster_ca_certificate" {
+  description = "AKS cluster CA certificate (base64), for configuring Terraform's kubernetes/helm providers"
+  value       = azurerm_kubernetes_cluster.this.kube_config[0].cluster_ca_certificate
+  sensitive   = true
+}
