@@ -10,3 +10,13 @@ frontend:
 secrets:
   azure:
     keyvaultName: "shopnest-staging-kv"
+
+ingress:
+  # Fill in once ingress-nginx is actually applied to staging and its
+  # LoadBalancer external IP is known (the free "<ip>.nip.io" trick, same
+  # pattern as dev, since no real domain exists yet). Deploying with this
+  # left empty will fail loudly via the `required` guard in ingress.yaml
+  # rather than silently rendering a broken Ingress.
+  host: ""
+  tls:
+    enabled: true

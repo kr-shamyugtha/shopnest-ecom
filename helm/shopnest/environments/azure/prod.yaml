@@ -12,3 +12,15 @@ frontend:
 secrets:
   azure:
     keyvaultName: "shopnest-prod-kv"
+
+ingress:
+  # Fill in once ingress-nginx is actually applied to prod and its
+  # LoadBalancer external IP is known. Replace with a real domain + a real
+  # (non-self-signed) cert-manager issuer before this is ever actually
+  # serving real traffic — the self-signed setup mirrors dev/staging only
+  # because no domain exists yet. Deploying with host left empty will fail
+  # loudly via the `required` guard in ingress.yaml rather than silently
+  # rendering a broken Ingress.
+  host: ""
+  tls:
+    enabled: true

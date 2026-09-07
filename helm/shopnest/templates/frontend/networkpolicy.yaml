@@ -1,5 +1,5 @@
-# Ingress-only — see backend/networkpolicy.yaml for why egress isn't
-# restricted here either.
+# See backend/networkpolicy.yaml for why egress isn't restricted, and why
+# ingress is scoped to the ingress-nginx namespace specifically.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -15,6 +15,10 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - ports:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
         - protocol: TCP
           port: {{ .Values.frontend.port }}

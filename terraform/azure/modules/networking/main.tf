@@ -25,11 +25,32 @@ resource "azurerm_subnet_network_security_group_association" "aks" {
   network_security_group_id = azurerm_network_security_group.aks.id
 }
 
+# Explicit allow for the ingress controller's LoadBalancer, at a lower
+# priority number (higher precedence) than the deny-all-else rule below.
+#
+# The claim that "AKS auto-injects its own allow rule on a BYO NSG for any
+# LoadBalancer Service" turned out to be false when actually tested against
+# a real ingress-nginx LoadBalancer Service — DenyInternetInbound blocked it
+# outright, confirmed via a live curl timeout and `az network nsg rule list`
+# showing only the one deny rule, no auto-injected allow. Don't assume that
+# claim holds for future LoadBalancer services either — verify each one.
+resource "azurerm_network_security_rule" "allow_ingress_inbound" {
+  name                        = "AllowIngressInbound"
+  priority                    = 150
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_ranges     = ["80", "443"]
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.aks.name
+}
+
 # Explicit deny, not just Azure's invisible built-in DenyAllInBound default —
 # this makes the inbound posture a reviewable line in a `plan` diff instead of
-# an assumption. AKS auto-injects its own (higher-precedence, lower-priority)
-# rules on this NSG for any LoadBalancer Service you create later, so this
-# doesn't block legitimate future ingress.
+# an assumption.
 resource "azurerm_network_security_rule" "deny_internet_inbound" {
   name                        = "DenyInternetInbound"
   priority                    = 200
