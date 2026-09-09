@@ -52,7 +52,6 @@ variable "tags" {
   }
 }
 
-
 variable "blob_delete_retention_days" {
   description = "Number of days deleted blob data is retained for recovery."
   type        = number
