@@ -1,11 +1,18 @@
 backend:
   image:
     tag: "2.0.0"
+  # This 2-node cluster is already at 96-99% CPU *requests* (Dsv7 quota is
+  # maxed, no room for a 3rd node) — 2 replicas here plus Argo CD's own
+  # overhead doesn't fit. 1 replica is enough for a dev/demo environment.
+  autoscaling:
+    minReplicas: 1
 
 frontend:
   image:
     tag: "2.0.0"
   razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+  autoscaling:
+    minReplicas: 1
 
 secrets:
   azure:
