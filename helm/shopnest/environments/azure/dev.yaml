@@ -18,6 +18,13 @@ secrets:
   azure:
     keyvaultName: "shopnest-dev-kv2"
 
+# Only changes when Terraform recreates the backend identity (rare) — safe
+# to commit directly (it's an identifier, not a secret) rather than relying
+# on a live `--set` at deploy time, which Argo CD's GitOps flow has no
+# equivalent for.
+workloadIdentity:
+  clientId: "b96a0772-0279-4fc8-9070-acb99fa25796"
+
 ingress:
   # ingress-nginx/cert-manager aren't installed this round (Free Trial
   # blocks inbound traffic to any public LoadBalancer regardless, so
