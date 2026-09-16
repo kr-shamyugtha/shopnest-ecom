@@ -1,30 +1,26 @@
 backend:
   image:
-    tag: "2.0.0"
+    tag: "1.0.43"
   # This 2-node cluster is already at 96-99% CPU *requests* (Dsv7 quota is
   # maxed, no room for a 3rd node) — 2 replicas here plus Argo CD's own
   # overhead doesn't fit. 1 replica is enough for a dev/demo environment.
   autoscaling:
     minReplicas: 1
-
 frontend:
   image:
-    tag: "2.0.0"
+    tag: "1.0.43"
   razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
   autoscaling:
     minReplicas: 1
-
 secrets:
   azure:
     keyvaultName: "shopnest-dev-kv2"
-
 # Only changes when Terraform recreates the backend identity (rare) — safe
 # to commit directly (it's an identifier, not a secret) rather than relying
 # on a live `--set` at deploy time, which Argo CD's GitOps flow has no
 # equivalent for.
 workloadIdentity:
   clientId: "b96a0772-0279-4fc8-9070-acb99fa25796"
-
 ingress:
   # ingress-nginx/cert-manager aren't installed this round (Free Trial
   # blocks inbound traffic to any public LoadBalancer regardless, so
