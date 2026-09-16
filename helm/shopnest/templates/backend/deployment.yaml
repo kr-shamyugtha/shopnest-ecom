@@ -45,6 +45,13 @@ spec:
 
       securityContext:
         runAsNonRoot: true
+        # The image's USER directive is a named user (appuser), not a numeric
+        # UID — kubelet can't verify that resolves to non-root without a
+        # numeric hint, and refuses to start the container at all
+        # (CreateContainerConfigError) without these two explicit values.
+        # Must match the UID/GID actually created in backend/Dockerfile.
+        runAsUser: 1001
+        runAsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
 

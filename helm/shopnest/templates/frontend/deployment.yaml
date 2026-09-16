@@ -38,6 +38,13 @@ spec:
 
       securityContext:
         runAsNonRoot: true
+        # The nginx image's USER directive is a named user (nginx), not a
+        # numeric UID — kubelet can't verify that resolves to non-root
+        # without a numeric hint, and refuses to start the container at all
+        # (CreateContainerConfigError) without these two explicit values.
+        # 101/101 is the nginx:alpine image's actual built-in uid/gid.
+        runAsUser: 101
+        runAsGroup: 101
         seccompProfile:
           type: RuntimeDefault
 
