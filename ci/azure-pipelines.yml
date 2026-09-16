@@ -350,7 +350,9 @@ stages:
     displayName: "Push Docker Images to ACR"
 
     dependsOn: SecurityScan
-    condition: succeeded()
+    # PR runs stop here — no point pushing images from unreviewed,
+    # unmerged code to the shared registry.
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
 
     jobs:
       - job: PushImages
@@ -475,7 +477,9 @@ stages:
     displayName: "Update GitOps Config for AKS"
 
     dependsOn: PushToACR
-    condition: succeeded()
+    # Same reasoning as PushToACR — a PR shouldn't be able to commit to
+    # the GitOps config and trigger a real deploy before it's even merged.
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
 
     jobs:
       - job: UpdateGitOpsConfig
