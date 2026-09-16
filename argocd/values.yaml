@@ -25,12 +25,15 @@ applications:
       # assumes the "shopnest" namespace.
       namespace: shopnest
     syncPolicy:
-      # Manual sync first, on purpose — the "shopnest" release already
-      # exists (deployed by CI's helm upgrade), so the first sync needs a
-      # human to check the diff is just label/ownership changes, not a
-      # resource recreate, before automated syncing is turned on. (The
-      # "automated" key must be entirely absent for a manual-sync app —
-      # the chart's CRD schema rejects an explicit `null`.)
+      # Manual-first verification is done: the release synced cleanly and
+      # survived two real fixes (image tag, workload identity clientId).
+      # No "critical" gate applies to dev, so full automation is correct —
+      # Argo CD should always just reconcile whatever Git says, no human
+      # click required. (Prod, when it exists, gets its gate upstream — a
+      # pipeline approval before the commit lands — never here.)
+      automated:
+        selfHeal: true
+        prune: true
       syncOptions:
         - CreateNamespace=true
 
