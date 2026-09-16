@@ -1,29 +1,4 @@
 applications:
-  shopnest:
-    namespace: argocd
-    additionalLabels: {}
-    additionalAnnotations: {}
-    finalizers:
-      - resources-finalizer.argocd.argoproj.io
-    project: shopnest
-    sources:
-      - repoURL: https://github.com/kr-shamyugtha/shopnest-ecom
-        path: helm/shopnest
-        targetRevision: HEAD
-        helm:
-          releaseName: shopnest
-          valueFiles:
-            - values-azure.yaml
-    destination:
-      server: https://kubernetes.default.svc
-      namespace: default
-    syncPolicy:
-      automated:
-        prune: false
-        selfHeal: false
-      syncOptions:
-        - CreateNamespace=true
-
   monitoring:
     namespace: argocd
     additionalLabels: {}
@@ -78,7 +53,7 @@ applications:
                         requests:
                           storage: 2Gi
               # NOTE: put the real Slack webhook URL in a Secret instead of
-              # committing it in plaintext here — see comment below.
+              # committing it in plaintext here.
               config:
                 global: {}
                 route:
@@ -143,7 +118,6 @@ applications:
             resultsCache:
               enabled: false
 
-            # Disable the extra pods that come with the default distributed values
             backend:
               replicas: 0
             read:
@@ -218,28 +192,11 @@ applications:
       server: https://kubernetes.default.svc
       namespace: monitoring
     syncPolicy:
-      automated:
-        prune: false
-        selfHeal: false
       syncOptions:
         - CreateNamespace=true
         - ServerSideApply=true
 
 projects:
-  shopnest:
-    namespace: argocd
-    additionalLabels: {}
-    additionalAnnotations: {}
-    permitOnlyProjectScopedClusters: false
-    finalizers:
-      - resources-finalizer.argocd.argoproj.io
-    description: Example Project
-    sourceRepos:
-      - '*'
-    destinations:
-      - namespace: default
-        server: https://kubernetes.default.svc
-
   monitoring:
     namespace: argocd
     additionalLabels: {}

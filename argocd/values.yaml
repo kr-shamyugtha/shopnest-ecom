@@ -1,0 +1,50 @@
+applications:
+  shopnest:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    project: shopnest
+    sources:
+      # HTTPS clone URL for this Azure Repos repo — Argo CD needs repo
+      # credentials configured for this (it's private), separate from this
+      # values file.
+      - repoURL: https://dev.azure.com/shopnest-devops/ShopNest/_git/ShopNest
+        path: helm/shopnest
+        targetRevision: HEAD
+        helm:
+          releaseName: shopnest
+          valueFiles:
+            - values-azure.yaml
+            - environments/azure/dev.yaml
+    destination:
+      server: https://kubernetes.default.svc
+      # Must match where the app actually runs — every other piece
+      # (CI, the federated identity subject, the NetworkPolicies) already
+      # assumes the "shopnest" namespace.
+      namespace: shopnest
+    syncPolicy:
+      # Manual sync first, on purpose — the "shopnest" release already
+      # exists (deployed by CI's helm upgrade), so the first sync needs a
+      # human to check the diff is just label/ownership changes, not a
+      # resource recreate, before automated syncing is turned on. (The
+      # "automated" key must be entirely absent for a manual-sync app —
+      # the chart's CRD schema rejects an explicit `null`.)
+      syncOptions:
+        - CreateNamespace=true
+
+projects:
+  shopnest:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    permitOnlyProjectScopedClusters: false
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    description: ShopNest application delivery
+    sourceRepos:
+      - https://dev.azure.com/shopnest-devops/ShopNest/_git/ShopNest
+    destinations:
+      - namespace: shopnest
+        server: https://kubernetes.default.svc
