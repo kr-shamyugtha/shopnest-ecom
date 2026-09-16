@@ -111,3 +111,14 @@ resource "azurerm_federated_identity_credential" "backend" {
   issuer  = azurerm_kubernetes_cluster.this.oidc_issuer_url
   subject = "system:serviceaccount:${var.workload_namespace}:${var.workload_service_account}"
 }
+
+# CI needs to read this identity's clientId (az identity show) to write it
+# into the GitOps config — scoped to just this one identity, not the whole
+# resource group, since that's all it actually needs.
+resource "azurerm_role_assignment" "ci_backend_identity_reader" {
+  count = var.ci_principal_id != null ? 1 : 0
+
+  scope                = azurerm_user_assigned_identity.backend.id
+  role_definition_name = "Reader"
+  principal_id         = var.ci_principal_id
+}
