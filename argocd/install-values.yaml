@@ -1,0 +1,56 @@
+# Lean, non-HA install for a small (2-node) cluster. No SSO, no alerting
+# integration exist yet, so dex/notifications are dropped rather than left
+# running idle. applicationSet has no enabled switch in this chart version —
+# replicas: 0 is the equivalent; raise it only if per-environment generators
+# are actually adopted later.
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+applicationSet:
+  replicas: 0
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+server:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      # 512Mi OOMKilled it in practice — cloning the repo and rendering the
+      # Helm chart needs more than that. 1Gi has real headroom, confirmed
+      # against measured node capacity (both nodes were under 55% memory
+      # even before this bump).
+      memory: 1Gi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

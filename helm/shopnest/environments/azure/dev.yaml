@@ -1,10 +1,10 @@
 backend:
   image:
-    tag: "1.0.35"
+    tag: "2.0.0"
 
 frontend:
   image:
-    tag: "1.0.35"
+    tag: "2.0.0"
   razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
 
 secrets:
@@ -12,9 +12,11 @@ secrets:
     keyvaultName: "shopnest-dev-kv2"
 
 ingress:
-  # ingress-nginx's LoadBalancer external IP, via the free nip.io wildcard
-  # DNS trick (no real domain owned yet). Update this if the IP ever changes
-  # (e.g. ingress-nginx gets reinstalled).
-  host: "48.201.27.112.nip.io"
+  # ingress-nginx/cert-manager aren't installed this round (Free Trial
+  # blocks inbound traffic to any public LoadBalancer regardless, so
+  # there's no point paying for one) — access is via kubectl port-forward
+  # instead. Ingress stays disabled rather than pointing at a nonexistent
+  # controller/issuer.
+  host: ""
   tls:
-    enabled: true
+    enabled: false
