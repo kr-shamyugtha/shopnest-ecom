@@ -22,11 +22,12 @@ secrets:
 workloadIdentity:
   clientId: "b96a0772-0279-4fc8-9070-acb99fa25796"
 ingress:
-  # ingress-nginx/cert-manager aren't installed this round (Free Trial
-  # blocks inbound traffic to any public LoadBalancer regardless, so
-  # there's no point paying for one) — access is via kubectl port-forward
-  # instead. Ingress stays disabled rather than pointing at a nonexistent
-  # controller/issuer.
-  host: ""
+  # Retesting whether the earlier "Free Trial blocks all inbound LB
+  # traffic" conclusion actually holds, or was specific to that session —
+  # no documented Azure policy says Free Trial blocks this universally.
+  # ingress-nginx's LoadBalancer external IP, via the free nip.io wildcard
+  # DNS trick (no real domain owned yet). TLS left off for this retest to
+  # keep cert-manager out of the loop while just checking raw reachability.
+  host: "20.79.75.216.nip.io"
   tls:
     enabled: false
