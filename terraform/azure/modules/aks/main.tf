@@ -51,11 +51,14 @@ resource "azurerm_kubernetes_cluster" "this" {
     secret_rotation_enabled = true
   }
 
-  oms_agent {
-    log_analytics_workspace_id = var.log_analytics_workspace_id
-  }
-
-  monitor_metrics {}
+  # oms_agent/monitor_metrics (Container Insights + Azure Managed
+  # Prometheus) removed deliberately — measured at ~946m CPU requests
+  # combined (ama-logs + ama-metrics daemonsets), a quarter of this
+  # 2-node cluster's entire allocatable CPU, on a cluster that was
+  # already at 99-100% CPU requests with no room for anything else.
+  # Replaced by a self-hosted kube-prometheus-stack + Loki instead of
+  # running both — also more portable (same stack works unchanged on
+  # EKS later), not just a workaround for the capacity constraint.
 
   tags = var.tags
 }
