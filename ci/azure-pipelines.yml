@@ -492,16 +492,18 @@ stages:
             persistCredentials: true
 
           # ----------------------------------------------------
-          # Fetch the backend identity's client ID. It's a generated
-          # UUID that changes whenever Terraform recreates the identity,
-          # so it's read live rather than hardcoded here — but unlike the
-          # old direct-helm-upgrade approach, it gets written into the
-          # committed GitOps config below, not passed as an ephemeral
-          # --set flag. Argo CD has no equivalent of --set: only what's
-          # in Git is ever applied.
+          # Fetch the identity AND update the config in one step.
+          # Merged deliberately: passing the fetched value to a separate
+          # step via a pipeline variable ($(VAR) macro) is ambiguous with
+          # bash's own $(...) command-substitution syntax, and can
+          # silently misbehave if the macro substitution doesn't fire —
+          # a plain bash variable used within the same script has no such
+          # ambiguity. A `git pull --rebase` guards against two runs
+          # racing to push (which would otherwise risk a rejected push,
+          # or worse, overwriting a correct commit with a stale one).
           # ----------------------------------------------------
           - task: AzureCLI@2
-            displayName: "Fetch Backend Identity Client ID"
+            displayName: "Fetch Identity and Update GitOps Config"
             inputs:
               azureSubscription: "sc-shopnest-azure"
               scriptType: "bash"
@@ -514,46 +516,53 @@ stages:
                   --name "shopnest-dev-backend-identity" \
                   --query clientId -o tsv)
 
-                echo "##vso[task.setvariable variable=BACKEND_IDENTITY_CLIENT_ID]$BACKEND_IDENTITY_CLIENT_ID"
+                echo "=============================================="
+                echo "Fetched backend identity client ID:"
+                echo "$BACKEND_IDENTITY_CLIENT_ID"
+                echo "=============================================="
 
-          # ----------------------------------------------------
-          # Update the GitOps config and push. This is the pipeline's
-          # entire job now — it never touches the cluster directly.
-          # Argo CD, watching this file, picks up the commit and
-          # reconciles automatically (syncPolicy.automated is on).
-          # ----------------------------------------------------
-          - script: |
-              set -euo pipefail
+                if [ -z "$BACKEND_IDENTITY_CLIENT_ID" ]; then
+                  echo "ERROR: fetched client ID is empty — aborting rather than writing a blank value."
+                  exit 1
+                fi
 
-              VERSION="1.0.$(Build.BuildId)"
-              CONFIG_FILE="helm/shopnest/environments/azure/dev.yaml"
+                VERSION="1.0.$(Build.BuildId)"
+                CONFIG_FILE="helm/shopnest/environments/azure/dev.yaml"
 
-              echo "=============================================="
-              echo "Installing yq"
-              echo "=============================================="
-              sudo wget -q "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -O /usr/local/bin/yq
-              sudo chmod +x /usr/local/bin/yq
-              yq --version
+                echo "=============================================="
+                echo "Installing yq"
+                echo "=============================================="
+                sudo wget -q "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -O /usr/local/bin/yq
+                sudo chmod +x /usr/local/bin/yq
+                yq --version
 
-              echo "=============================================="
-              echo "Updating $CONFIG_FILE (version $VERSION)"
-              echo "=============================================="
+                echo "=============================================="
+                echo "Updating $CONFIG_FILE (version $VERSION)"
+                echo "=============================================="
 
-              yq -i ".backend.image.tag = \"$VERSION\"" "$CONFIG_FILE"
-              yq -i ".frontend.image.tag = \"$VERSION\"" "$CONFIG_FILE"
-              yq -i ".workloadIdentity.clientId = \"$(BACKEND_IDENTITY_CLIENT_ID)\"" "$CONFIG_FILE"
+                yq -i ".backend.image.tag = \"$VERSION\"" "$CONFIG_FILE"
+                yq -i ".frontend.image.tag = \"$VERSION\"" "$CONFIG_FILE"
+                yq -i ".workloadIdentity.clientId = \"$BACKEND_IDENTITY_CLIENT_ID\"" "$CONFIG_FILE"
 
-              cat "$CONFIG_FILE"
+                echo "=============================================="
+                echo "Resulting $CONFIG_FILE contents"
+                echo "=============================================="
+                cat "$CONFIG_FILE"
 
-              git config user.name "Azure Pipelines"
-              git config user.email "azure-pipelines@shopnest.local"
-              git add "$CONFIG_FILE"
+                git config user.name "Azure Pipelines"
+                git config user.email "azure-pipelines@shopnest.local"
+                git add "$CONFIG_FILE"
 
-              if git diff --cached --quiet; then
-                echo "No changes to commit — config already matches this version."
-                exit 0
-              fi
+                if git diff --cached --quiet; then
+                  echo "No changes to commit — config already matches this version."
+                  exit 0
+                fi
 
-              git commit -m "ci: bump dev image tag to $VERSION [skip ci]"
-              git push origin HEAD:main
-            displayName: "Update GitOps Config and Push"
+                git commit -m "ci: bump dev image tag to $VERSION [skip ci]"
+
+                # Guard against a second pipeline run having pushed in
+                # the meantime — rebase onto whatever's actually on main
+                # right now before pushing, rather than risking a
+                # rejected push or a silently stale push.
+                git pull --rebase origin main
+                git push origin HEAD:main
