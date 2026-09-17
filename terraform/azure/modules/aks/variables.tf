@@ -52,10 +52,6 @@ variable "vm_size" {
   default = "Standard_D2s_v7"
 }
 
-variable "log_analytics_workspace_id" {
-  type = string
-}
-
 variable "pod_cidr" {
   description = "Virtual pod address space for Azure CNI Overlay. Doesn't need to be unique across environments or avoid the VNet CIDR the way vnet_cidr does."
   type        = string

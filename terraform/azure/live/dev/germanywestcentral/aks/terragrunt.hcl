@@ -37,14 +37,6 @@ dependency "acr" {
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
-dependency "monitoring" {
-  config_path = "../monitoring"
-  mock_outputs = {
-    workspace_id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/law"
-  }
-  mock_outputs_allowed_terraform_commands = ["validate"]
-}
-
 inputs = {
   project_name         = local.project_name
   environment         = local.environment
@@ -52,7 +44,6 @@ inputs = {
   resource_group_name  = dependency.resource_group.outputs.name
   subnet_id            = dependency.networking.outputs.aks_subnet_id
   acr_id = dependency.acr.outputs.id
-  log_analytics_workspace_id = dependency.monitoring.outputs.workspace_id
   admin_group_object_ids = [
   "bb200924-909c-46ff-9ae7-a282264ccc6a"
 ]
