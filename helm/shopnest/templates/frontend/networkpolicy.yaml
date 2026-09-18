@@ -1,5 +1,11 @@
 # See backend/networkpolicy.yaml for why egress isn't restricted, and why
 # ingress is scoped to the ingress-nginx namespace specifically.
+#
+# Also allows the cloudflared-tunnel pod (same namespace, by label) — when
+# ingress-nginx isn't installed (Free Trial subscription can't reach a
+# public LoadBalancer regardless), a Cloudflare Tunnel pod calls the
+# frontend Service directly instead, same-namespace, and needs the same
+# kind of explicit allow the backend's NetworkPolicy already grants it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,6 +25,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: cloudflared-tunnel
       ports:
         - protocol: TCP
           port: {{ .Values.frontend.port }}
