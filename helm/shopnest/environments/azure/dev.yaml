@@ -1,6 +1,6 @@
 backend:
   image:
-    tag: "1.0.48"
+    tag: "3.0.0"
   # This 2-node cluster is already at 96-99% CPU *requests* (Dsv7 quota is
   # maxed, no room for a 3rd node) — 2 replicas here plus Argo CD's own
   # overhead doesn't fit. 1 replica is enough for a dev/demo environment.
@@ -8,7 +8,7 @@ backend:
     minReplicas: 1
 frontend:
   image:
-    tag: "1.0.48"
+    tag: "3.0.0"
   razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
   autoscaling:
     minReplicas: 1
@@ -20,14 +20,13 @@ secrets:
 # on a live `--set` at deploy time, which Argo CD's GitOps flow has no
 # equivalent for.
 workloadIdentity:
-  clientId: "15b4f024-bc6f-4211-9fda-d592a7737c1a"
+  clientId: "fb1581b1-15aa-463b-ac44-54cc10f42359"
 ingress:
-  # Retesting whether the earlier "Free Trial blocks all inbound LB
-  # traffic" conclusion actually holds, or was specific to that session —
-  # no documented Azure policy says Free Trial blocks this universally.
-  # ingress-nginx's LoadBalancer external IP, via the free nip.io wildcard
-  # DNS trick (no real domain owned yet). TLS left off for this retest to
-  # keep cert-manager out of the loop while just checking raw reachability.
-  host: "20.79.75.216.nip.io"
+  # ingress-nginx isn't installed this round — the Free Trial subscription's
+  # inbound restriction is confirmed real (repeated across two independent
+  # fresh IPs and a full rebuild), so a public LoadBalancer here would just
+  # burn cost for no reachability. Access is via a Cloudflare Tunnel
+  # (outbound-only, sidesteps the restriction entirely) instead.
+  host: ""
   tls:
     enabled: false
