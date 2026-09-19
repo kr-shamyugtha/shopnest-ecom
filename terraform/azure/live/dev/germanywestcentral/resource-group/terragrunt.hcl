@@ -21,5 +21,6 @@ inputs = {
     ManagedBy   = "terraform"
     Environment = local.environment
     Project     = local.project_name
+    AtlantisTest = "webhook-verify"
   }
 }
