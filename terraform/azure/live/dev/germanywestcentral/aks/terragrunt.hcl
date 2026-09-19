@@ -45,10 +45,10 @@ inputs = {
   subnet_id            = dependency.networking.outputs.aks_subnet_id
   acr_id = dependency.acr.outputs.id
   admin_group_object_ids = [
-  "bb200924-909c-46ff-9ae7-a282264ccc6a"
+  "190544d6-0159-4194-aefe-10600507b1e4"
 ]
   # sc-shopnest-azure Azure DevOps service connection's service principal
-  ci_principal_id = "8b108a77-54ef-4512-9f0b-2eb97c02ac68"
+  ci_principal_id = "1ad45693-e0d5-4461-bc95-c274d62d2a46"
   enable_auto_scaling  = true
   min_count            = 2
   max_count            = 2
