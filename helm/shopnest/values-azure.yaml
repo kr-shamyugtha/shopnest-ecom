@@ -3,7 +3,7 @@ cloud:
 
 backend:
   image:
-    repository: shopnestacr.azurecr.io/shopnest-backend
+    repository: shopnestacr2026.azurecr.io/shopnest-backend
 
   config:
     port: "5000"
@@ -12,14 +12,14 @@ backend:
 
 frontend:
   image:
-    repository: shopnestacr.azurecr.io/shopnest-frontend
+    repository: shopnestacr2026.azurecr.io/shopnest-frontend
 
 secrets:
   enabled: true
   providerClassName: shopnest-backend
 
   azure:
-    tenantId: "e1e8e860-fa83-475d-ab45-170185504741"
+    tenantId: "1734f897-f9d3-41eb-a30c-60d092d8a5d8"
 
 workloadIdentity:
   enabled: true

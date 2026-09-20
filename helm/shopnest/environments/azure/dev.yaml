@@ -14,19 +14,19 @@ frontend:
     minReplicas: 1
 secrets:
   azure:
-    keyvaultName: "shopnest-dev-kv2"
+    keyvaultName: "shopnest-dev-kv2026"
 # Only changes when Terraform recreates the backend identity (rare) — safe
 # to commit directly (it's an identifier, not a secret) rather than relying
 # on a live `--set` at deploy time, which Argo CD's GitOps flow has no
 # equivalent for.
 workloadIdentity:
-  clientId: "fb1581b1-15aa-463b-ac44-54cc10f42359"
+  clientId: "3beeff69-98f3-43f1-95ed-28067bff16bd"
 ingress:
-  # ingress-nginx isn't installed this round — the Free Trial subscription's
-  # inbound restriction is confirmed real (repeated across two independent
-  # fresh IPs and a full rebuild), so a public LoadBalancer here would just
-  # burn cost for no reachability. Access is via a Cloudflare Tunnel
-  # (outbound-only, sidesteps the restriction entirely) instead.
+  # ingress-nginx's LoadBalancer (48.203.37.136) is directly reachable —
+  # the earlier "Free Trial blocks inbound" diagnosis was wrong; the real
+  # cause was the subnet NSG's DenyInternetInbound rule swallowing Azure's
+  # LB health-probe traffic before it could be allowed. Fixed at the NSG
+  # layer (see terraform/azure/modules/networking), no tunnel needed.
   host: ""
   tls:
     enabled: false
