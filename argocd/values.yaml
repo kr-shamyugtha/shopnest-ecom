@@ -53,11 +53,18 @@ projects:
     destinations:
       - namespace: shopnest
         server: https://kubernetes.default.svc
-    # Cluster-scoped resources denied by omitting clusterResourceWhitelist
-    # (Argo CD's default when unset). Namespace-scoped kinds explicitly
-    # limited to what the app actually needs — notably excludes Role/
-    # RoleBinding, so a compromised or mis-templated chart change can
-    # never grant itself permissions via a synced manifest.
+    # Cluster-scoped resources denied by default except Namespace itself —
+    # needed because syncPolicy.syncOptions has CreateNamespace=true, and
+    # that goes through this same project permission check (confirmed live:
+    # omitting this produced "resource :Namespace is not permitted in
+    # project shopnest" and the sync retried in a loop, never progressing
+    # past PreSync). Namespace-scoped kinds explicitly limited to what the
+    # app actually needs — notably excludes Role/RoleBinding, so a
+    # compromised or mis-templated chart change can never grant itself
+    # permissions via a synced manifest.
+    clusterResourceWhitelist:
+      - group: ""
+        kind: Namespace
     namespaceResourceWhitelist:
       - group: "apps"
         kind: Deployment
