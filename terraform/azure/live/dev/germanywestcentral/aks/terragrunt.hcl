@@ -47,8 +47,15 @@ inputs = {
   admin_group_object_ids = [
   "190544d6-0159-4194-aefe-10600507b1e4"
 ]
-  # sc-shopnest-azure Azure DevOps service connection's service principal
-  ci_principal_id = "1ad45693-e0d5-4461-bc95-c274d62d2a46"
+  # sc-shopnest-azure Azure DevOps service connection's actual OIDC identity:
+  # the SERVICE PRINCIPAL (not the Application object — a different Graph
+  # object with a different object ID; role assignments reject Application
+  # IDs with "PrincipalTypeNotSupported") for the app Azure DevOps
+  # auto-provisioned for workload-identity federation
+  # (kavitography-shopnest-ado-34471a29-...), NOT the manually created
+  # "shopnest-ci" app, which has no federated credential and can't be used
+  # by the service connection at all.
+  ci_principal_id = "c4a166f3-2c4d-4bce-9e4e-0880dc154ba5"
   enable_auto_scaling  = true
   min_count            = 2
   max_count            = 2
