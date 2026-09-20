@@ -48,6 +48,27 @@ resource "azurerm_network_security_rule" "allow_ingress_inbound" {
   network_security_group_name = azurerm_network_security_group.aks.name
 }
 
+# Azure's health-probe traffic (168.63.129.16) is classified under the
+# "Internet" service tag, so without this rule DenyInternetInbound below
+# blocks the LB's own probes before the built-in AllowAzureLoadBalancerInBound
+# rule (priority 65001, lower precedence than any custom rule) can act —
+# confirmed live: the ingress-nginx LoadBalancer's backend showed unhealthy
+# and the public IP timed out until this rule was added. Must stay at a lower
+# priority number than DenyInternetInbound.
+resource "azurerm_network_security_rule" "allow_azure_lb_probes" {
+  name                        = "AllowAzureLBProbes"
+  priority                    = 190
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "AzureLoadBalancer"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.aks.name
+}
+
 # Explicit deny, not just Azure's invisible built-in DenyAllInBound default —
 # this makes the inbound posture a reviewable line in a `plan` diff instead of
 # an assumption.
