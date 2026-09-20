@@ -9,8 +9,10 @@ applications:
     sources:
       # HTTPS clone URL for this Azure Repos repo — Argo CD needs repo
       # credentials configured for this (it's private), separate from this
-      # values file.
-      - repoURL: https://dev.azure.com/shopnest-devops/ShopNest/_git/ShopNest
+      # values file. This is kavitography/shopnest-ado, the org the CI
+      # pipeline actually pushes to — NOT shopnest-devops/ShopNest, an
+      # older/parallel repo that had diverged.
+      - repoURL: https://dev.azure.com/kavitography/shopnest-ado/_git/shopnest-ado
         path: helm/shopnest
         targetRevision: HEAD
         helm:
@@ -47,7 +49,31 @@ projects:
       - resources-finalizer.argocd.argoproj.io
     description: ShopNest application delivery
     sourceRepos:
-      - https://dev.azure.com/shopnest-devops/ShopNest/_git/ShopNest
+      - https://dev.azure.com/kavitography/shopnest-ado/_git/shopnest-ado
     destinations:
       - namespace: shopnest
         server: https://kubernetes.default.svc
+    # Cluster-scoped resources denied by omitting clusterResourceWhitelist
+    # (Argo CD's default when unset). Namespace-scoped kinds explicitly
+    # limited to what the app actually needs — notably excludes Role/
+    # RoleBinding, so a compromised or mis-templated chart change can
+    # never grant itself permissions via a synced manifest.
+    namespaceResourceWhitelist:
+      - group: "apps"
+        kind: Deployment
+      - group: ""
+        kind: Service
+      - group: ""
+        kind: ServiceAccount
+      - group: ""
+        kind: ConfigMap
+      - group: "autoscaling"
+        kind: HorizontalPodAutoscaler
+      - group: "policy"
+        kind: PodDisruptionBudget
+      - group: "networking.k8s.io"
+        kind: NetworkPolicy
+      - group: "networking.k8s.io"
+        kind: Ingress
+      - group: "secrets-store.csi.x-k8s.io"
+        kind: SecretProviderClass
