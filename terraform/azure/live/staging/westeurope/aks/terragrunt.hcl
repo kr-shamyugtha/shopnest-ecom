@@ -45,8 +45,11 @@ inputs = {
   resource_group_name         = dependency.resource_group.outputs.name
   subnet_id                   = dependency.networking.outputs.aks_subnet_id
   acr_id                      = dependency.acr.outputs.id
+  # Old tenant's "shopnest-aks-admins" group — deleted along with the old
+  # tenant in the trial migration. Updated to the same group's new-tenant
+  # object ID (dev uses this too; only prod has its own dedicated group).
   admin_group_object_ids = [
-    "bb200924-909c-46ff-9ae7-a282264ccc6a"
+    "190544d6-0159-4194-aefe-10600507b1e4"
   ]
   enable_auto_scaling = true
   min_count           = 2
