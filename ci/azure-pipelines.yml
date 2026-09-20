@@ -432,7 +432,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Login to Azure and Push Images"
             inputs:
-              azureSubscription: "sc-shopnest-azure"
+              azureSubscription: "sc-shopnest-azure-manual"
               scriptType: "bash"
               scriptLocation: "inlineScript"
               inlineScript: |
@@ -505,7 +505,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Fetch Identity and Update GitOps Config"
             inputs:
-              azureSubscription: "sc-shopnest-azure"
+              azureSubscription: "sc-shopnest-azure-manual"
               scriptType: "bash"
               scriptLocation: "inlineScript"
               inlineScript: |
