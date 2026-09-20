@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: shopnestacr.azurecr.io/shopnest-frontend:v2
+          image: shopnestacr2026.azurecr.io/shopnest-frontend:v2
 
           ports:
             - containerPort: 8080
