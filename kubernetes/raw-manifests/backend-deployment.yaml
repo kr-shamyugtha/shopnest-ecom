@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: shopnestacr.azurecr.io/shopnest-backend:v1
+          image: shopnestacr2026.azurecr.io/shopnest-backend:v1
 
           ports:
             - containerPort: 5000
