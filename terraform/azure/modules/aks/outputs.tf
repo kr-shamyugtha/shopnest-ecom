@@ -23,12 +23,12 @@ output "keyvault_secrets_provider_object_id" {
 
 output "backend_identity_client_id" {
   description = "Client ID of the ShopNest backend workload identity"
-  value       = azurerm_user_assigned_identity.backend.client_id
+  value       = module.backend_workload_identity.client_id
 }
 
 output "backend_identity_object_id" {
   description = "Object ID of the ShopNest backend workload identity"
-  value       = azurerm_user_assigned_identity.backend.principal_id
+  value       = module.backend_workload_identity.principal_id
 }
 
 output "host" {
