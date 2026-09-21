@@ -23,6 +23,8 @@ generate "provider" {
 provider "azurerm" {
   features {}
 }
+
+provider "azuread" {}
 PROVIDER
 }
 
@@ -37,6 +39,12 @@ terraform {
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 5.0"
+    }
+    # Only actually used by the ci-identity unit, but required_providers
+    # can't be overridden per-unit here — see the helm/kubernetes note below.
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
     }
     # helm/kubernetes are only actually used by ingress-nginx and
     # cert-manager, but a module can only have one required_providers block,
