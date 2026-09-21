@@ -2,7 +2,7 @@ variable "environment" {
   description = "Deployment environment"
   type        = string
 }
- variable "project_name" {
+variable "project_name" {
   type = string
 }
 
