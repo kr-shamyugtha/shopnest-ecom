@@ -35,6 +35,11 @@ inputs = {
   location                    = dependency.resource_group.outputs.location
   resource_group_name         = dependency.resource_group.outputs.name
   backend_identity_object_id  = dependency.aks.outputs.backend_identity_object_id
+
+  # shopnest-aks-admins — the same Entra group that holds AKS admin access
+  # (see the aks unit's admin_group_object_ids). Secret management is granted
+  # to this group, never to whoever happens to run Terraform.
+  admin_object_id = "190544d6-0159-4194-aefe-10600507b1e4"
   key_vault_name = "shopnest-dev-kv2026"
   tags = {
     ManagedBy   = "terraform"

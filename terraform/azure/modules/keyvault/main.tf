@@ -1,7 +1,7 @@
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "this" {
-  name = var.key_vault_name
+  name                       = var.key_vault_name
   location                   = var.location
   resource_group_name        = var.resource_group_name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
@@ -16,13 +16,32 @@ resource "azurerm_key_vault" "this" {
 resource "azurerm_role_assignment" "backend_secrets_reader" {
   scope                = azurerm_key_vault.this.id
   role_definition_name = "Key Vault Secrets User"
-  principal_id          = var.backend_identity_object_id
+  principal_id         = var.backend_identity_object_id
 }
 
-resource "azurerm_role_assignment" "self_secrets_officer" {
+# Secret MANAGEMENT (create/update/delete) — deliberately separated from the
+# read-only grant above, and deliberately NOT bound to whoever happens to be
+# running Terraform.
+#
+# This was previously data.azurerm_client_config.current.object_id, which
+# silently granted full secret CRUD to the identity executing `apply`. That is
+# an escalation path: the moment CI (or Atlantis) runs this module, the
+# pipeline's service principal would gain read/write on every secret in the
+# vault without that ever appearing in a diff. Naming the principal explicitly
+# means the set of people who can manage secrets is reviewable in code.
+#
+# Granted to a GROUP rather than a person, matching how the AKS cluster's
+# admin access is already handled (admin_group_object_ids) — membership
+# changes then don't require a Terraform run.
+resource "azurerm_role_assignment" "admin_secrets_officer" {
   scope                = azurerm_key_vault.this.id
   role_definition_name = "Key Vault Secrets Officer"
-  principal_id          = data.azurerm_client_config.current.object_id
+  principal_id         = var.admin_object_id
+}
+
+moved {
+  from = azurerm_role_assignment.self_secrets_officer
+  to   = azurerm_role_assignment.admin_secrets_officer
 }
 
 resource "azurerm_management_lock" "this" {
