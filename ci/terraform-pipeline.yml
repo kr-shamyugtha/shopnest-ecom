@@ -1,0 +1,148 @@
+# ============================================================
+# ShopNest — Infrastructure CI
+#
+#   PR or push touching terraform/**
+#        │
+#        ▼
+#   1. Validate   terraform fmt -check  ·  checkov  (both gate the build)
+#
+# WHY THIS IS A SEPARATE PIPELINE FROM ci/azure-pipelines.yml
+#
+# That one builds, scans and ships the application; it triggers on
+# application code and knows nothing about Terraform. Running IaC
+# analysis there would scan the infrastructure on every frontend CSS
+# change and skip it whenever only Terraform moved — exactly backwards.
+# Path filters below mean this runs when, and only when, the
+# infrastructure definitions actually change.
+#
+# THIS PIPELINE IS ANALYSIS ONLY. It never runs plan or apply against
+# real infrastructure, so it needs no Azure service connection and no
+# credentials at all — nothing here can change a cloud resource. Applies
+# stay a deliberate, human-run step. (Atlantis was trialled for
+# PR-driven plan/apply and is currently parked; if it comes back, it
+# owns plan/apply and this pipeline still owns static analysis.)
+#
+# SETUP NOTE: a YAML file in the repo is not a pipeline until Azure
+# DevOps is told about it — Pipelines → New pipeline → Azure Repos Git →
+# Existing Azure Pipelines YAML file → /ci/terraform-pipeline.yml.
+# ============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+      - .checkov.yaml
+      - ci/terraform-pipeline.yml
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+      - .checkov.yaml
+      - ci/terraform-pipeline.yml
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # Pinned. Checkov ships new policies continuously, and an unpinned
+  # image means a build that passed yesterday can fail today without a
+  # single line of this repo changing. Bump this deliberately, read the
+  # new findings, then decide: fix, or add a documented skip.
+  - name: checkovImage
+    value: "bridgecrew/checkov:3.3.19"
+
+  - name: terraformVersion
+    value: "1.15.7"
+
+stages:
+  - stage: Validate
+    displayName: "Infrastructure Static Analysis"
+
+    jobs:
+      - job: IaCValidate
+        displayName: "Format check and policy scan"
+
+        steps:
+          - checkout: self
+            displayName: "Checkout Source Code"
+
+          # ------------------------------------------------------
+          # Formatting. Cheap, deterministic, and runs first so a
+          # whitespace-only failure doesn't wait on the policy scan.
+          # -recursive covers the modules and the live tree.
+          # ------------------------------------------------------
+          - task: TerraformInstaller@1
+            displayName: "Install Terraform $(terraformVersion)"
+            inputs:
+              terraformVersion: "$(terraformVersion)"
+
+          - script: |
+              set -euo pipefail
+              echo "Checking Terraform formatting..."
+              if ! terraform fmt -check -recursive -diff terraform/; then
+                echo ""
+                echo "Formatting check FAILED. Run this locally and commit the result:"
+                echo "  terraform fmt -recursive terraform/"
+                exit 1
+              fi
+              echo "All Terraform files are correctly formatted."
+            displayName: "Terraform fmt -check"
+
+          # ------------------------------------------------------
+          # Checkov. Configuration — the scanned directory, the
+          # framework, and every documented skip — lives in
+          # .checkov.yaml at the repo root, NOT inline here, so the
+          # exact same command reproduces the CI result locally.
+          #
+          # --config-file makes the skip list reviewable in one
+          # place; -w /tf makes the relative `directory:` in that
+          # file resolve the same way it does on a laptop.
+          # ------------------------------------------------------
+          - script: |
+              set -euo pipefail
+
+              echo "=============================================="
+              echo "Checkov — Terraform policy scan"
+              echo "Image: $(checkovImage)"
+              echo "=============================================="
+
+              mkdir -p "$(Build.ArtifactStagingDirectory)"
+
+              # The results directory is mounted READ-WRITE as /out and the
+              # report is written to a path INSIDE the container. Writing
+              # straight to $(Build.ArtifactStagingDirectory) silently
+              # produces nothing: that host path does not exist inside the
+              # container, so checkov writes into the container filesystem
+              # and the file vanishes when it exits — leaving
+              # PublishTestResults with nothing to publish and no error to
+              # explain why. The source mount stays :ro; only /out is
+              # writable.
+              docker run --rm \
+                -v "$(Build.SourcesDirectory)":/tf:ro \
+                -v "$(Build.ArtifactStagingDirectory)":/out \
+                -w /tf \
+                "$(checkovImage)" \
+                --config-file .checkov.yaml \
+                --output cli \
+                --output junitxml \
+                --output-file-path console,/out/checkov-junit.xml
+            displayName: "Checkov — IaC policy scan"
+
+          # Published whether the scan passed or failed — a red build
+          # with no artifact to read is a worse outcome than a red
+          # build you can diagnose from the Tests tab.
+          - task: PublishTestResults@2
+            displayName: "Publish Checkov results"
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: "JUnit"
+              testResultsFiles: "$(Build.ArtifactStagingDirectory)/checkov-junit.xml"
+              testRunTitle: "Checkov IaC Policy Scan"
+              failTaskOnFailedTests: false
