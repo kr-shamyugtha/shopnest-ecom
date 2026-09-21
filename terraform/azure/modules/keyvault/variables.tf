@@ -34,3 +34,18 @@ variable "enable_delete_lock" {
   type        = bool
   default     = false
 }
+
+variable "admin_object_id" {
+  description = <<-EOT
+    Object ID of the principal granted Key Vault Secrets Officer (full
+    create/update/delete on secrets). Prefer an Entra group over an
+    individual user, so changing who can manage secrets is a membership
+    change rather than a Terraform run.
+
+    Deliberately required with no default: an implicit fallback to
+    data.azurerm_client_config.current.object_id is what this variable
+    exists to remove — it silently handed full secret access to whatever
+    identity ran `terraform apply`, including CI.
+  EOT
+  type        = string
+}
