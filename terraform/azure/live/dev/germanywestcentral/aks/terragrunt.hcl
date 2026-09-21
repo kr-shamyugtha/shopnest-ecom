@@ -37,6 +37,14 @@ dependency "acr" {
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
+dependency "ci_identity" {
+  config_path = "../../../shared/germanywestcentral/ci-identity"
+  mock_outputs = {
+    service_principal_object_id = "00000000-0000-0000-0000-000000000000"
+  }
+  mock_outputs_allowed_terraform_commands = ["validate"]
+}
+
 inputs = {
   project_name         = local.project_name
   environment         = local.environment
@@ -47,15 +55,12 @@ inputs = {
   admin_group_object_ids = [
   "190544d6-0159-4194-aefe-10600507b1e4"
 ]
-  # sc-shopnest-azure Azure DevOps service connection's actual OIDC identity:
-  # the SERVICE PRINCIPAL (not the Application object — a different Graph
-  # object with a different object ID; role assignments reject Application
-  # IDs with "PrincipalTypeNotSupported") for the app Azure DevOps
-  # auto-provisioned for workload-identity federation
-  # (kavitography-shopnest-ado-34471a29-...), NOT the manually created
-  # "shopnest-ci" app, which has no federated credential and can't be used
-  # by the service connection at all.
-  ci_principal_id = "c4a166f3-2c4d-4bce-9e4e-0880dc154ba5"
+  # sc-shopnest-azure Azure DevOps service connection's OIDC identity, now
+  # owned by the ci-identity module (imported from the app Azure DevOps
+  # originally auto-provisioned — kavitography-shopnest-ado-34471a29-...).
+  # Role assignments need the SERVICE PRINCIPAL object ID specifically, not
+  # the Application object ID ("PrincipalTypeNotSupported" otherwise).
+  ci_principal_id = dependency.ci_identity.outputs.service_principal_object_id
   enable_auto_scaling  = true
   min_count            = 2
   max_count            = 2
