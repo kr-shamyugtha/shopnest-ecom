@@ -21,6 +21,23 @@ applications:
                 enabled: true
                 type: pvc
                 size: 5Gi
+              # Sized from MEASURED usage, not guessed. The first attempt at
+              # this (limit 256Mi) OOMKilled Grafana twice - exit 137 - because
+              # steady-state sits at ~190Mi and rendering a dashboard spikes
+              # well past that. Grafana loads all 30 provisioned dashboards
+              # into memory, so it is the heaviest thing in this namespace
+              # despite looking like the lightest.
+              #
+              # Observed: cpu 129m, memory 189Mi. Request now covers the
+              # steady state; the limit leaves room for render spikes rather
+              # than sitting on top of them.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
               additionalDataSources:
                 - name: Loki
                   type: loki
@@ -28,9 +45,548 @@ applications:
                   url: http://loki-gateway.monitoring.svc.cluster.local
                   isDefault: false
 
+              # ------------------------------------------------------
+              # ShopNest dashboard, provisioned as a file through Grafana's
+              # dashboardProviders rather than through the chart's
+              # extraManifests.
+              #
+              # extraManifests looks like the obvious place, but it renders
+              # every manifest through Helm's `tpl`. Grafana's legend syntax
+              # is {{label}}, which Helm then tries to evaluate as a function
+              # call and the whole sync dies with
+              #   function "route" not defined
+              # This path embeds the JSON verbatim - verified by rendering
+              # the chart locally - so Grafana's braces survive intact.
+              #
+              # Every query uses only metrics backend/metrics/metrics.js
+              # actually exports. Denominators are wrapped in
+              # clamp_min(..., 1e-9) so the percentage panels read 0 at idle
+              # instead of NaN.
+              # ------------------------------------------------------
+              dashboardProviders:
+                dashboardproviders.yaml:
+                  apiVersion: 1
+                  providers:
+                    - name: shopnest
+                      orgId: 1
+                      folder: ShopNest
+                      type: file
+                      disableDeletion: false
+                      editable: true
+                      options:
+                        path: /var/lib/grafana/dashboards/shopnest
+              dashboards:
+                shopnest:
+                  shopnest-red:
+                    json: |
+                      {
+                        "title": "ShopNest \u2014 RED & Business",
+                        "uid": "shopnest-red",
+                        "tags": [
+                          "shopnest"
+                        ],
+                        "timezone": "browser",
+                        "schemaVersion": 39,
+                        "refresh": "30s",
+                        "time": {
+                          "from": "now-1h",
+                          "to": "now"
+                        },
+                        "templating": {
+                          "list": [
+                            {
+                              "name": "DS_PROMETHEUS",
+                              "type": "datasource",
+                              "query": "prometheus",
+                              "current": {
+                                "text": "Prometheus",
+                                "value": "Prometheus"
+                              },
+                              "hide": 0
+                            }
+                          ]
+                        },
+                        "panels": [
+                          {
+                            "id": 100,
+                            "type": "row",
+                            "title": "RATE",
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 0
+                            },
+                            "collapsed": false
+                          },
+                          {
+                            "id": 1,
+                            "title": "Request rate (req/s)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 8,
+                              "x": 0,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(rate(shopnest_http_requests_total[5m]))",
+                                "legendFormat": "total",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "reqps"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 2,
+                            "title": "Request rate by route",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 16,
+                              "x": 8,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (route) (rate(shopnest_http_requests_total[5m]))",
+                                "legendFormat": "{{route}}",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "reqps"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 200,
+                            "type": "row",
+                            "title": "ERRORS",
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 8
+                            },
+                            "collapsed": false
+                          },
+                          {
+                            "id": 3,
+                            "title": "5xx error rate (%)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 8,
+                              "x": 0,
+                              "y": 9
+                            },
+                            "targets": [
+                              {
+                                "expr": "100 * sum(rate(shopnest_http_requests_total{status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(shopnest_http_requests_total[5m])), 1e-9)",
+                                "legendFormat": "5xx %",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "percent",
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "green",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "orange",
+                                      "value": 1
+                                    },
+                                    {
+                                      "color": "red",
+                                      "value": 5
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 4,
+                            "title": "Responses by status code",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 16,
+                              "x": 8,
+                              "y": 9
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (status_code) (rate(shopnest_http_requests_total[5m]))",
+                                "legendFormat": "{{status_code}}",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "reqps"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 300,
+                            "type": "row",
+                            "title": "DURATION",
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 16
+                            },
+                            "collapsed": false
+                          },
+                          {
+                            "id": 5,
+                            "title": "Latency p95 (s)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 8,
+                              "x": 0,
+                              "y": 17
+                            },
+                            "targets": [
+                              {
+                                "expr": "histogram_quantile(0.95, sum(rate(shopnest_http_request_duration_seconds_bucket[5m])) by (le))",
+                                "legendFormat": "p95",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "s"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 6,
+                            "title": "Latency p50 / p95 / p99",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 16,
+                              "x": 8,
+                              "y": 17
+                            },
+                            "targets": [
+                              {
+                                "expr": "histogram_quantile(0.50, sum(rate(shopnest_http_request_duration_seconds_bucket[5m])) by (le))",
+                                "legendFormat": "p50",
+                                "refId": "A"
+                              },
+                              {
+                                "expr": "histogram_quantile(0.95, sum(rate(shopnest_http_request_duration_seconds_bucket[5m])) by (le))",
+                                "legendFormat": "p95",
+                                "refId": "B"
+                              },
+                              {
+                                "expr": "histogram_quantile(0.99, sum(rate(shopnest_http_request_duration_seconds_bucket[5m])) by (le))",
+                                "legendFormat": "p99",
+                                "refId": "C"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "s"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 400,
+                            "type": "row",
+                            "title": "BUSINESS",
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 24
+                            },
+                            "collapsed": false
+                          },
+                          {
+                            "id": 7,
+                            "title": "Orders created (1h)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 6,
+                              "x": 0,
+                              "y": 25
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(increase(shopnest_orders_created_total[1h]))",
+                                "legendFormat": "orders",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 8,
+                            "title": "Order failures (1h)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 6,
+                              "x": 6,
+                              "y": 25
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(increase(shopnest_order_creation_failures_total[1h]))",
+                                "legendFormat": "failures",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 9,
+                            "title": "Orders by status",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 12,
+                              "x": 12,
+                              "y": 25
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (status) (shopnest_orders_by_status)",
+                                "legendFormat": "{{status}}",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 10,
+                            "title": "Payment verification: success vs failure",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 12,
+                              "x": 0,
+                              "y": 31
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(rate(shopnest_payment_verification_success_total[5m]))",
+                                "legendFormat": "success",
+                                "refId": "A"
+                              },
+                              {
+                                "expr": "sum(rate(shopnest_payment_verification_failures_total[5m]))",
+                                "legendFormat": "failure",
+                                "refId": "B"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 11,
+                            "title": "Payment attempts",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 12,
+                              "x": 12,
+                              "y": 31
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(rate(shopnest_payment_attempts_total[5m]))",
+                                "legendFormat": "attempts",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 500,
+                            "type": "row",
+                            "title": "HEALTH",
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 37
+                            },
+                            "collapsed": false
+                          },
+                          {
+                            "id": 12,
+                            "title": "Scrape target up",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 8,
+                              "x": 0,
+                              "y": 38
+                            },
+                            "targets": [
+                              {
+                                "expr": "up{job=\"backend\"}",
+                                "legendFormat": "backend",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 13,
+                            "title": "Available replicas",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 16,
+                              "x": 8,
+                              "y": 38
+                            },
+                            "targets": [
+                              {
+                                "expr": "kube_deployment_status_replicas_available{namespace=\"shopnest\"}",
+                                "legendFormat": "{{deployment}}",
+                                "refId": "A"
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          }
+                        ]
+                      }
+
+
             prometheus:
               enabled: true
               prometheusSpec:
+                # THE MOST IMPORTANT SETTING IN THIS FILE.
+                # By default this chart's Prometheus only watches
+                # ServiceMonitors carrying ITS OWN Helm release label
+                # (release=monitoring). Everything created by a different
+                # release - the Loki chart, the Alloy chart, and the
+                # ShopNest app chart - is then silently ignored: the
+                # ServiceMonitor exists, looks healthy, and is never
+                # scraped. Setting these to false makes Prometheus watch
+                # every ServiceMonitor/PodMonitor/PrometheusRule in every
+                # namespace regardless of who created it.
+                serviceMonitorSelectorNilUsesHelmValues: false
+                serviceMonitorNamespaceSelector: {}
+                podMonitorSelectorNilUsesHelmValues: false
+                podMonitorNamespaceSelector: {}
+                ruleSelectorNilUsesHelmValues: false
+                ruleNamespaceSelector: {}
+
+                # Previously unset, which made this pod BestEffort QoS -
+                # the first thing evicted or OOM-killed under node
+                # pressure. Losing Prometheus is losing the ability to
+                # see why anything else broke, so it gets a real
+                # reservation. Sized for a 2-node D2s_v7 cluster with
+                # ~1.2 vCPU spare, not a production fleet.
+                resources:
+                  requests:
+                    cpu: 150m
+                    memory: 512Mi
+                  limits:
+                    cpu: 750m
+                    memory: 1Gi
+
                 retention: 7d
                 storageSpec:
                   volumeClaimTemplate:
@@ -44,6 +600,13 @@ applications:
             alertmanager:
               enabled: true
               alertmanagerSpec:
+                resources:
+                  requests:
+                    cpu: 25m
+                    memory: 100Mi
+                  limits:
+                    cpu: 100m
+                    memory: 200Mi
                 storage:
                   volumeClaimTemplate:
                     spec:
@@ -82,6 +645,140 @@ applications:
             kubeStateMetrics:
               enabled: true
 
+            # Subchart-level resources. nodeExporter/kubeStateMetrics above
+            # are the enable flags; the resource blocks belong to the
+            # subcharts themselves, which is why they are keyed by the
+            # subchart name rather than nested under those toggles.
+            prometheus-node-exporter:
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+
+            kube-state-metrics:
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+
+            prometheusOperator:
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+
+            # ============================================================
+            # ShopNest alert rules.
+            #
+            # Deliberately few, and each one gated so it does not fire on
+            # normal noise - a single pod restart during a rollout, or one
+            # failed request, should not page anyone. These are the first
+            # rules in this cluster that are about ShopNest rather than
+            # about Kubernetes itself; every one of the 35 rules shipped by
+            # this chart describes the platform, not the application.
+            #
+            # BackendDown and PodCrashLooping read kube-state-metrics, which
+            # is already scraped, so they work immediately. The 5xx and
+            # latency rules read the application's own metrics and stay
+            # silent until the backend ServiceMonitor is syncing.
+            # ============================================================
+            additionalPrometheusRulesMap:
+              shopnest-rules:
+                groups:
+                  - name: shopnest.availability
+                    rules:
+                      - alert: ShopNestBackendDown
+                        expr: kube_deployment_status_replicas_available{namespace="shopnest", deployment="shopnest-backend"} < 1
+                        for: 2m
+                        labels:
+                          severity: critical
+                        annotations:
+                          summary: "ShopNest backend has no available replicas"
+                          description: >-
+                            The backend Deployment has had zero available
+                            replicas for 2 minutes. The API is down. Check
+                            `kubectl -n shopnest get pods,events`.
+
+                      - alert: ShopNestFrontendDown
+                        expr: kube_deployment_status_replicas_available{namespace="shopnest", deployment="shopnest-frontend"} < 1
+                        for: 2m
+                        labels:
+                          severity: critical
+                        annotations:
+                          summary: "ShopNest frontend has no available replicas"
+                          description: >-
+                            The frontend Deployment has had zero available
+                            replicas for 2 minutes. The site is unreachable.
+
+                      - alert: ShopNestPodCrashLooping
+                        expr: increase(kube_pod_container_status_restarts_total{namespace="shopnest"}[15m]) > 3
+                        for: 5m
+                        labels:
+                          severity: critical
+                        annotations:
+                          summary: "{{ $labels.pod }} is crash looping"
+                          description: >-
+                            {{ $labels.container }} in {{ $labels.pod }} has
+                            restarted {{ $value | printf "%.0f" }} times in 15
+                            minutes. Gated at >3 rather than >0 so a single
+                            expected restart during a rollout does not page.
+
+                  - name: shopnest.golden-signals
+                    rules:
+                      - alert: ShopNestHigh5xxRate
+                        expr: >-
+                          100 * sum(rate(shopnest_http_requests_total{status_code=~"5.."}[5m]))
+                          / clamp_min(sum(rate(shopnest_http_requests_total[5m])), 1e-9) > 5
+                        for: 5m
+                        labels:
+                          severity: warning
+                        annotations:
+                          summary: "ShopNest backend returning over 5% 5xx"
+                          description: >-
+                            5xx rate has been above 5% for 5 minutes
+                            ({{ $value | printf "%.1f" }}% now). clamp_min keeps
+                            the expression from dividing by zero at idle.
+
+                      - alert: ShopNestHighLatencyP95
+                        expr: >-
+                          histogram_quantile(0.95,
+                            sum(rate(shopnest_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+                        for: 5m
+                        labels:
+                          severity: warning
+                        annotations:
+                          summary: "ShopNest p95 latency above 1s"
+                          description: >-
+                            p95 request latency has been above 1 second for 5
+                            minutes ({{ $value | printf "%.2f" }}s now). A
+                            starting threshold for a dev-sized cluster, to be
+                            tuned once real traffic patterns are known.
+
+                  - name: shopnest.business
+                    rules:
+                      - alert: ShopNestPaymentVerificationFailing
+                        expr: >-
+                          sum(rate(shopnest_payment_verification_failures_total[10m]))
+                          > sum(rate(shopnest_payment_verification_success_total[10m]))
+                        for: 10m
+                        labels:
+                          severity: warning
+                        annotations:
+                          summary: "ShopNest payment verification failing more than succeeding"
+                          description: >-
+                            Failed payment verifications have outnumbered
+                            successful ones for 10 minutes. Likely a Razorpay
+                            signature/secret problem rather than a pod problem.
+
       - chart: loki
         repoURL: https://grafana.github.io/helm-charts
         targetRevision: 6.52.0
@@ -108,6 +805,13 @@ applications:
 
             singleBinary:
               replicas: 1
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
               persistence:
                 enabled: true
                 size: 10Gi
@@ -127,14 +831,27 @@ applications:
 
             gateway:
               enabled: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
 
             monitoring:
               serviceMonitor:
                 enabled: true
               selfMonitoring:
                 enabled: false
-              lokiCanary:
-                enabled: false
+
+            # lokiCanary moved OUT of `monitoring:` - it is a top-level key in
+            # loki chart 6.52.0 (values.yaml line 780) and defaults to true.
+            # Nested under monitoring it was silently ignored, which is why two
+            # loki-canary pods have been running on a 2-node cluster that has
+            # no use for them.
+            lokiCanary:
+              enabled: false
 
             test:
               enabled: false
@@ -181,6 +898,20 @@ applications:
                       url = "http://loki-gateway/loki/api/v1/push"
                     }
                   }
+
+              # NOTE the nesting: this chart reads container resources from
+              # alloy.resources, NOT a top-level `resources:` key. Placed at
+              # the top level it is silently ignored - the chart renders
+              # fine, the DaemonSet comes up, and the containers simply have
+              # no requests. Verified against `helm template grafana/alloy`
+              # before committing.
+              resources:
+                requests:
+                  cpu: 30m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
 
             controller:
               type: daemonset
