@@ -96,3 +96,13 @@ workloadIdentity:
   enabled: false
   serviceAccountName: shopnest-backend
   clientId: ""
+# ----------------------------------------------------------------------
+# Monitoring
+#
+# The ServiceMonitor is a separate CRD from the workload itself, so it is
+# gated independently: a cluster without the Prometheus Operator installed
+# has no ServiceMonitor CRD, and syncing one there fails the whole release.
+# ----------------------------------------------------------------------
+monitoring:
+  serviceMonitor:
+    enabled: true

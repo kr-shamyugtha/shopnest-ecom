@@ -84,3 +84,10 @@ projects:
         kind: Ingress
       - group: "secrets-store.csi.x-k8s.io"
         kind: SecretProviderClass
+      # Added so the backend's ServiceMonitor can sync. Without it the
+      # Application fails with "resource monitoring.coreos.com:ServiceMonitor
+      # is not permitted in project shopnest" - the same admission check that
+      # caught Namespace earlier. That failure is the whitelist working as
+      # intended: nothing reaches the cluster that was not explicitly allowed.
+      - group: "monitoring.coreos.com"
+        kind: ServiceMonitor
