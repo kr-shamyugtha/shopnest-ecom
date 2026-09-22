@@ -51,6 +51,26 @@ resource "azurerm_storage_account" "state" {
   }
 
   tags = var.tags
+
+  # This account holds the remote state for every environment. Losing it
+  # does not just delete a resource — it orphans the record of everything
+  # Terraform manages, leaving live Azure infrastructure that no
+  # configuration knows about any more.
+  #
+  # prevent_destroy is a PLAN-TIME guard: any plan that would destroy or
+  # replace this account fails before it reaches Azure. It costs nothing
+  # and needs no apply to take effect. Note what it does NOT cover — it
+  # only constrains Terraform. A portal deletion or `az storage account
+  # delete` goes straight through, which is what the CanNotDelete
+  # management lock in modules/resource-group and modules/keyvault exists
+  # for; the same treatment belongs here.
+  #
+  # If a genuine replacement is ever needed (changing a ForceNew
+  # attribute), remove this block deliberately in its own commit rather
+  # than working around it.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # ============================================================================
