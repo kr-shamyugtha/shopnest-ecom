@@ -1,0 +1,46 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+# Tells the kube-prometheus-stack Prometheus to scrape this service's
+# /metrics endpoint, where backend/metrics/metrics.js exposes RED metrics
+# (rate, errors, duration) plus ShopNest's order and payment counters.
+#
+# Two things have to line up for this to work, and both are easy to get
+# subtly wrong:
+#
+#  1. `selector.matchLabels` must match the BACKEND SERVICE's labels, not
+#     the Deployment's or the Pod's. A ServiceMonitor selects Services;
+#     Prometheus then scrapes the Endpoints behind them.
+#  2. `port` is the Service port's NAME ("http"), not its number. A
+#     numeric value here produces a ServiceMonitor that matches nothing
+#     and reports no error.
+#
+# Prometheus only discovers this because
+# serviceMonitorSelectorNilUsesHelmValues is false in
+# argocd/values-monitoring.yaml. Without it, only ServiceMonitors carrying
+# the monitoring release's own label are watched, and this one - created
+# by a different Helm release - would be silently ignored.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shopnest-backend
+  labels:
+    # Kept so this is also discovered under the chart's DEFAULT selector,
+    # which matches on the monitoring release label. Belt and braces: it
+    # works whether or not the selector override above is in place.
+    release: monitoring
+    app.kubernetes.io/name: shopnest-backend
+    app.kubernetes.io/part-of: shopnest
+    app.kubernetes.io/component: backend
+
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shopnest-backend
+      app.kubernetes.io/part-of: shopnest
+      app.kubernetes.io/component: backend
+
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+{{- end }}

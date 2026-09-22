@@ -36,6 +36,16 @@ spec:
         - podSelector:
             matchLabels:
               app: shopnest-frontend
+        # 3. Prometheus, for the /metrics endpoint this pod exposes on the
+        #    same port. Without this the ServiceMonitor is discovered, the
+        #    target appears in Prometheus, and every scrape fails with
+        #    "context deadline exceeded" - a TIMEOUT, not a refusal, because
+        #    a NetworkPolicy drops packets silently rather than rejecting
+        #    them. That is the signature of a policy block and it looks
+        #    nothing like a misconfigured endpoint.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
       ports:
         - protocol: TCP
           port: {{ .Values.backend.port }}
