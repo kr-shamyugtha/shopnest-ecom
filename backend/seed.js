@@ -24,48 +24,91 @@ const importData = async () => {
       role: 'admin'
     });
 
-    const products = [
-      {
-        name: 'Wireless Noise-Cancelling Headphones',
-        description: 'Immersive sound experience with advanced active noise cancellation.',
-        price: 299.99,
-        category: 'Electronics',
-        stock: 15,
-        imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-        ratings: 4.8,
-        numReviews: 24
-      },
-      {
-        name: 'Minimalist Modern Chair',
-        description: 'A stylish and comfortable addition to any contemporary living room.',
-        price: 150.00,
-        category: 'Furniture',
-        stock: 30,
-        imageUrl: 'https://images.unsplash.com/photo-1505843490538-5133c6c7d0e1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-        ratings: 4.2,
-        numReviews: 12
-      },
-      {
-        name: 'Professional DSLR Camera',
-        description: 'Capture stunning moments with high-resolution clarity and speed.',
-        price: 1199.99,
-        category: 'Electronics',
-        stock: 8,
-        imageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-        ratings: 4.9,
-        numReviews: 50
-      },
-      {
-        name: 'Classic White Sneakers',
-        description: 'Versatile and comfortable, a staple for any casual outfit.',
-        price: 85.00,
-        category: 'Clothing',
-        stock: 50,
-        imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-        ratings: 4.5,
-        numReviews: 89
-      }
-    ];
+const products = [
+  {
+    name: 'La Mer The Cleansing Foam',
+    description: 'A luxurious facial cleanser that gently removes impurities while leaving the skin feeling soft, refreshed, and comfortable.',
+    price: 8500,
+    category: 'Skincare',
+    stock: 20,
+    imageUrl: 'https://cdn.fynd.com/v2/falling-surf-7c8bb8/fyprod/wrkr/products/pictures/item/free/original/000000000494431078/_mWggB5e5-000000000494431078_4.jpg',
+    ratings: 4.8,
+    numReviews: 42
+  },
+  {
+    name: 'SK-II Facial Treatment Essence',
+    description: 'A premium essence formulated to hydrate the skin and improve the appearance of texture, clarity, and radiance.',
+    price: 15500,
+    category: 'Skincare',
+    stock: 15,
+    imageUrl: 'https://images.ctfassets.net/jopdimxwavth/4OipOlCGjSWG9YBEGv5io1/41d4d4c235fe363376e9685a2f5a9338/FTE-Overview-PC.png?fm=webp&w=3840&q=90',
+    ratings: 4.9,
+    numReviews: 67
+  },
+  {
+    name: 'Estée Lauder Advanced Night Repair',
+    description: 'A luxurious nighttime serum designed to hydrate, smooth, and improve the appearance of fine lines and tired-looking skin.',
+    price: 9900,
+    category: 'Skincare',
+    stock: 18,
+    imageUrl: 'https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcR9Ap5o_wKKiGwcHCUAgZjJe1z9ifAojM5ZkmYkC-VSAXowOoOazvGxljFV6ZGNHEMROBUXogO_HwCgH3MWZd0RolGiKcLJ',
+    ratings: 4.8,
+    numReviews: 85
+  },
+  {
+    name: 'Shiseido Ultimune Power Infusing Concentrate',
+    description: 'An advanced facial concentrate designed to support skin resilience while improving hydration and radiance.',
+    price: 8900,
+    category: 'Skincare',
+    stock: 12,
+    imageUrl: 'https://www.shiseido.com/dw/image/v2/BBSK_PRD/on/demandware.static/-/Sites-itemmaster_shiseido/default/dw9ab70d0d/images/2025/May/Ultimune/9990000000232_3.jpg?sw=800&sh=800&sm=fit&strip=false',
+    ratings: 4.7,
+    numReviews: 53
+  },
+  {
+    name: 'La Mer Crème de la Mer',
+    description: 'An iconic luxury moisturizer formulated to deeply hydrate, nourish, and soften the appearance of dry skin.',
+    price: 32000,
+    category: 'Skincare',
+    stock: 8,
+    imageUrl: 'https://www.cremedelamer.com/media/export/cms/products/responsive/lm_prod_12343_US_4x5_1.png?width=900&height=1125',
+    ratings: 4.9,
+    numReviews: 91
+  },
+
+  {
+    name: 'Fresh Black Tea Instant Perfecting Mask',
+    description: 'A luxurious face mask designed to hydrate, soften, and refresh tired-looking skin for a smoother appearance.',
+    price: 5500,
+    category: 'Skincare',
+    stock: 14,
+    imageUrl: 'https://www.cultbeauty.com/images?url=https://static.thcdn.com/productimg/original/13127406-8434876946241012.jpg&format=webp&auto=avif&width=1200&height=1200&fit=cover',
+    ratings: 4.7,
+    numReviews: 31
+  },
+  {
+    name: 'Tatcha The Rice Polish',
+    description: 'A gentle exfoliating powder cleanser designed to polish away dead surface cells while leaving skin smooth and refreshed.',
+    price: 6200,
+    category: 'Skincare',
+    stock: 16,
+    imageUrl: 'https://tatcha.com/cdn/shop/files/RicePolishGentle-pdp-FullSize-Hand-1200x1200.jpg?v=21013?width=1000',
+    ratings: 4.8,
+    numReviews: 44
+  },
+  {
+    name: 'Augustinus Bader The Rich Cream',
+    description: 'A luxurious intensive face cream designed to deeply hydrate and nourish dry, stressed-looking skin.',
+    price: 28000,
+    category: 'Skincare',
+    stock: 7,
+    imageUrl: 'https://augustinusbader.com/cdn/shop/files/Copy_of_The_Rich_Cream_All_Sizes_Lifestyle_01.jpg?v=1786042006&width=960',
+    ratings: 4.9,
+    numReviews: 72
+  }
+];
+
+
 
     await Product.insertMany(products);
     
