@@ -11,18 +11,26 @@ connectDB();
 
 const importData = async () => {
   try {
-    await User.deleteMany();
+    // Only the catalog is replaced. An unfiltered User.deleteMany() here
+    // wiped every registered account while leaving orders and payment
+    // attempts pointing at users that no longer existed.
     await Product.deleteMany();
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash('password123', salt);
-    
-    const adminUser = await User.create({
-      name: 'Admin User',
-      email: 'admin@shopnest.com',
-      password: hashedPassword,
-      role: 'admin'
-    });
+
+    // Upsert, not create — re-running this would otherwise collide with
+    // the unique index on email now that the user table survives.
+    await User.findOneAndUpdate(
+      { email: 'admin@shopnest.com' },
+      {
+        name: 'Admin User',
+        email: 'admin@shopnest.com',
+        password: hashedPassword,
+        role: 'admin'
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
 const products = [
   {
