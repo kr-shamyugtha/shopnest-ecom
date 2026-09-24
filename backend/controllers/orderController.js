@@ -87,9 +87,46 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+
+// A customer may withdraw their own order, but only while it is still
+// Placed — once it ships, cancelling is a returns problem, not an order
+// problem. Ownership is checked explicitly so one account cannot cancel
+// another's order by guessing an id.
+const cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You cannot cancel an order that is not yours' });
+    }
+
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({ message: 'This order is already cancelled' });
+    }
+
+    if (order.status !== 'Placed') {
+      return res.status(400).json({
+        message: `An order that has been ${order.status.toLowerCase()} can no longer be cancelled`
+      });
+    }
+
+    order.status = 'Cancelled';
+    const updatedOrder = await order.save();
+
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   addOrderItems,
   getMyOrders,
   getOrders,
-  updateOrderStatus
+  updateOrderStatus,
+  cancelOrder
 };
