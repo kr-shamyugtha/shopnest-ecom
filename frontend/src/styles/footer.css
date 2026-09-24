@@ -1,0 +1,87 @@
+/* ============================================================
+   Footer
+   ============================================================ */
+
+.site-footer {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  margin-top: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: clamp(48px, 6vw, 76px) 24px clamp(32px, 4vw, 48px);
+  display: grid;
+  grid-template-columns: 1.6fr repeat(3, 1fr);
+  gap: clamp(28px, 4vw, 56px);
+}
+
+.footer-brand h3 {
+  font-family: var(--display);
+  font-size: 1.9rem;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+.footer-brand h3::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
+.footer-brand p { font-size: 0.9rem; max-width: 34ch; line-height: 1.75; }
+
+.footer-col { display: flex; flex-direction: column; gap: 11px; }
+
+.footer-col h5 {
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+
+.footer-col a, .footer-col p {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  width: fit-content;
+  border-bottom: 1px solid transparent;
+  transition: all 0.3s var(--ease);
+}
+
+.footer-col a:hover { color: var(--ink); border-bottom-color: var(--gold); }
+
+.footer-base {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 22px 24px 32px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+}
+
+.footer-mark { color: var(--gold); letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.68rem; }
+
+@media (max-width: 860px) {
+  .footer-inner { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 520px) {
+  .footer-inner { grid-template-columns: 1fr; }
+  .footer-base { justify-content: center; text-align: center; }
+}

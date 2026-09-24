@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { toast } from '../components/Toast';
 import '../styles/auth.css';
 
 const Register = () => {
@@ -20,7 +21,7 @@ const Register = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        alert('Registration Successful! Please check your email for the Welcome OTP.');
+        toast('Welcome to ShopNest — check your inbox for the welcome OTP.');
         login(data);
         navigate('/');
       } else {
@@ -34,9 +35,10 @@ const Register = () => {
   return (
     <div className="auth-container">
       <form onSubmit={handleSubmit} className="auth-form">
-        <h2>Register</h2>
-        <input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <span className="eyebrow">Join us</span>
+        <h2>Create an account</h2>
+        <input type="text" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <input type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <button type="submit" className="btn">Register</button>
         <p>Already have an account? <Link to="/login">Login</Link></p>

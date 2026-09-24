@@ -85,7 +85,7 @@ const options = {
           contact: '9999999999'
         },
         theme: {
-          color: '#f97316'
+          color: 'var(--gold)'
         }
       };
       

@@ -1,3 +1,4 @@
+import { CATEGORIES } from '../utils/catalog';
 import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -44,17 +45,25 @@ const EditProduct = () => {
   };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '40px auto', background: '#18181b', padding: '40px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-      <h2 style={{ color: '#f97316', marginBottom: '20px' }}>Edit Product</h2>
+    <div style={{ maxWidth: '600px', margin: '40px auto', background: 'var(--surface)', padding: '40px', borderRadius: '12px', border: '1px solid var(--line)' }}>
+      <h2 style={{ color: 'var(--gold)', marginBottom: '20px' }}>Edit Product</h2>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <input type="text" placeholder="Product Name" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} style={inputStyle} />
         <textarea placeholder="Description" required rows="4" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} style={inputStyle} />
         <input type="number" placeholder="Price" required value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} style={inputStyle} />
-        <input type="text" placeholder="Category" required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} style={inputStyle} />
+        <select required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} style={inputStyle}>
+          <option value="" disabled>Select a category</option>
+          {/* An existing product may predate the canonical list; keep its
+              value selectable rather than silently blanking the field. */}
+          {(CATEGORIES.includes(formData.category) || !formData.category
+            ? CATEGORIES
+            : [formData.category, ...CATEGORIES]
+          ).map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
         <input type="number" placeholder="Stock" required value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})} style={inputStyle} />
-        <div style={{ padding: '15px', border: '1px dashed #f97316', borderRadius: '8px' }}>
-          <label style={{ display: 'block', marginBottom: '10px', color: '#a1a1aa' }}>Replace Image (Optional)</label>
-          <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0])} style={{ color: '#fff' }} />
+        <div style={{ padding: '15px', border: '1px dashed var(--gold)', borderRadius: '8px' }}>
+          <label style={{ display: 'block', marginBottom: '10px', color: 'var(--ink-soft)' }}>Replace Image (Optional)</label>
+          <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0])} style={{ color: 'var(--ink)' }} />
         </div>
         <button type="submit" disabled={loading} className="btn" style={{ marginTop: '10px' }}>
           {loading ? 'Updating...' : 'Update Product'}
@@ -64,5 +73,5 @@ const EditProduct = () => {
   );
 };
 
-const inputStyle = { padding: '12px', background: '#09090b', border: '1px solid #27272a', borderRadius: '6px', color: '#fff', fontSize: '15px', outline: 'none' };
+const inputStyle = { padding: '12px', background: 'var(--bg-alt)', border: '1px solid var(--line)', borderRadius: '6px', color: 'var(--ink)', fontSize: '15px', outline: 'none' };
 export default EditProduct;

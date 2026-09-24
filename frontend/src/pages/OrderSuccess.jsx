@@ -1,27 +1,21 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import '../styles/cart.css';
 
-const OrderSuccess = () => {
-  const containerStyle = {
-    maxWidth: '600px',
-    margin: '50px auto',
-    padding: '50px 30px',
-    background: '#18181b',
-    borderRadius: '16px',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
-    textAlign: 'center'
-  };
-
-  return (
-    <div style={containerStyle}>
-      <h2 style={{ fontSize: '2.5rem', marginBottom: '20px', color: '#10b981' }}>Payment Successful!</h2>
-      <p style={{ color: '#a1a1aa', fontSize: '1.2rem', marginBottom: '40px' }}>
-        Thank you for your order. We have securely received your payment and will process your shipment shortly.
-      </p>
-      <Link to="/shop" className="btn">Continue Shopping</Link>
+const OrderSuccess = () => (
+  <div className="order-success">
+    <div className="seal">✓</div>
+    <span className="eyebrow">Order confirmed</span>
+    <h2>Thank you for your order</h2>
+    <p>
+      We've received your payment securely and your parcel is being
+      prepared. A confirmation is on its way to your inbox.
+    </p>
+    <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <Link to="/shop" className="btn">Continue shopping</Link>
+      <Link to="/profile" className="btn btn-ghost">View your orders</Link>
     </div>
-  );
-};
+  </div>
+);
 
 export default OrderSuccess;

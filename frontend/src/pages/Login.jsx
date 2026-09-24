@@ -32,8 +32,9 @@ const Login = () => {
   return (
     <div className="auth-container">
       <form onSubmit={handleSubmit} className="auth-form">
-        <h2>Login</h2>
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <span className="eyebrow">Welcome back</span>
+        <h2>Sign in</h2>
+        <input type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <button type="submit" className="btn">Login</button>
         <p>Don't have an account? <Link to="/register">Register</Link></p>
