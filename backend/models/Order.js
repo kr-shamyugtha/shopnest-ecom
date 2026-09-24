@@ -18,7 +18,14 @@ const orderSchema = new mongoose.Schema({
     country: { type: String, required: true }
   },
   paymentId: { type: String },
-  status: { type: String, enum: ['Pending', 'Shipped', 'Delivered'], default: 'Pending' },
+  // 'Placed' replaced 'Pending', which read as though the shop hadn't
+  // accepted the order yet. 'Cancelled' is terminal and only reachable
+  // while the order is still Placed — see cancelOrder.
+  status: {
+    type: String,
+    enum: ['Placed', 'Shipped', 'Delivered', 'Cancelled'],
+    default: 'Placed'
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);
