@@ -1,45 +1,57 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
-const textualStyle = {
-  maxWidth: '900px',
-  margin: '0 auto',
-  padding: '40px',
-  background: '#18181b',
-  borderRadius: '16px',
-  border: '1px solid rgba(255, 255, 255, 0.05)',
-  lineHeight: '1.8',
-  color: '#a1a1aa'
-};
-
-const About = () => {
-  return (
-    <div style={textualStyle}>
-      <h2 style={{ color: '#fff', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '15px' }}>
-        About Us
-      </h2>
-      
-      <p style={{ marginBottom: '20px' }}>
-        At ShopNest, we believe shopping should be simple, enjoyable, and accessible to everyone. Our platform brings together a carefully curated collection of quality products across electronics, fashion, home essentials, and lifestyle categories, ensuring you can find everything you need in one place.
-
-We are committed to providing an exceptional shopping experience through an intuitive interface, secure transactions, fast order processing, and reliable customer support. Every feature of ShopNest is designed with our customers in mind, making it easy to browse, compare, and purchase products with confidence.
-
-Whether you're looking for the latest gadgets, everyday essentials, or unique finds, ShopNest strives to deliver quality, value, and convenience with every order.
-      </p>
-
-      <h4 style={{ color: '#f97316', marginTop: '25px', marginBottom: '10px' }}>Our Mission</h4>
-      <p style={{ marginBottom: '15px' }}>
-        To empower customers with a seamless and trustworthy online shopping experience by combining innovative technology, quality products, and outstanding service.
-      </p>
-
-      <h4 style={{ color: '#f97316', marginTop: '25px', marginBottom: '10px' }}>Our Vision</h4>
-      <p style={{ marginBottom: '15px' }}>
-        To become a leading digital marketplace that connects customers with products they love while fostering trust, innovation, and long-term customer relationships.
-      </p>
-
-      <p style={{ marginTop: '30px', fontStyle: 'italic', fontSize: '0.9rem' }}>
-        Thank you for choosing ShopNest. We look forward to being your preferred destination for online shopping.</p>
+const About = () => (
+  <div className="about-page">
+    <div className="section-head">
+      <div>
+        <span className="eyebrow">Our story</span>
+        <h2>A smaller shelf, chosen carefully</h2>
+        <p>
+          ShopNest exists because buying good skincare online is harder
+          than it should be — too much choice, too little honesty.
+        </p>
+      </div>
     </div>
-  );
-};
+    <hr className="rule" />
+
+    <div className="panel panel-pad" style={{ maxWidth: 860, margin: '0 auto' }}>
+      <p style={{ marginBottom: 22 }}>
+        We stock a deliberately small edit of skincare from houses that have
+        spent decades refining a single formula — La Mer, SK-II, Estée Lauder,
+        Shiseido, Tatcha, Fresh and Augustinus Bader. Every product is sourced
+        direct, never through the grey market, and arrives exactly as the
+        house intended it.
+      </p>
+
+      <p style={{ marginBottom: 22 }}>
+        There is no endless catalogue here, and that is the point. A shelf
+        you can read in a minute is worth more than a warehouse you have to
+        search. We would rather carry eight products we can vouch for than
+        eight hundred we cannot.
+      </p>
+
+      <h4 style={{ color: 'var(--gold)', marginTop: 34, marginBottom: 12, letterSpacing: '0.18em', textTransform: 'uppercase', fontSize: '0.74rem' }}>
+        What we promise
+      </h4>
+      <p style={{ marginBottom: 22 }}>
+        Authentic products, secure payment through Razorpay, and a returns
+        policy written in plain language. If something isn't right, we would
+        rather hear about it than keep your money.
+      </p>
+
+      <h4 style={{ color: 'var(--gold)', marginTop: 34, marginBottom: 12, letterSpacing: '0.18em', textTransform: 'uppercase', fontSize: '0.74rem' }}>
+        Where we're going
+      </h4>
+      <p style={{ marginBottom: 32 }}>
+        To become the place people trust for skincare worth the ritual —
+        growing slowly, and only ever adding a product when it earns its
+        place on the shelf.
+      </p>
+
+      <Link to="/shop" className="btn">Browse the collection</Link>
+    </div>
+  </div>
+);
 
 export default About;

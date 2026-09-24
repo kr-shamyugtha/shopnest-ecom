@@ -1,33 +1,46 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { CATEGORIES } from '../utils/catalog';
+import { toast } from '../components/Toast';
+import { inr } from '../utils/format';
+import '../styles/admin.css';
 
 const AddProduct = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  
+
   const [formData, setFormData] = useState({
     name: '', description: '', price: '', category: '', stock: ''
   });
   const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  if (!user || user.role !== 'admin') {
-    navigate('/');
-    return null;
-  }
+  // Redirecting during render is a side effect React warns about, and
+  // it fired on every render for non-admins. Do it after commit.
+  useEffect(() => {
+    if (!user || user.role !== 'admin') navigate('/');
+  }, [user, navigate]);
+
+  // Object URLs leak until revoked, and this form can go through many
+  // images in one admin session.
+  useEffect(() => {
+    if (!image) { setPreview(null); return; }
+    const url = URL.createObjectURL(image);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [image]);
+
+  if (!user || user.role !== 'admin') return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!image) return alert('Please select an image');
-    
+    if (!image) { toast('Please choose a product image'); return; }
+
     setLoading(true);
     const data = new FormData();
-    data.append('name', formData.name);
-    data.append('description', formData.description);
-    data.append('price', formData.price);
-    data.append('category', formData.category);
-    data.append('stock', formData.stock);
+    Object.entries(formData).forEach(([k, v]) => data.append(k, v));
     data.append('image', image);
 
     try {
@@ -37,75 +50,87 @@ const AddProduct = () => {
         body: data
       });
       const responseData = await res.json();
-      
+
       if (res.ok) {
-        alert('Product created successfully with Cloudinary Image URL!');
+        toast(`${formData.name} published to ${formData.category}`);
         navigate('/shop');
       } else {
-        alert(responseData.message || 'Error creating product');
+        toast(responseData.message || 'Could not create the product');
       }
     } catch (error) {
       console.error(error);
+      toast('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const set = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
+
   return (
-    <div style={{ maxWidth: '600px', margin: '40px auto', background: '#18181b', padding: '40px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-      <h2 style={{ color: '#f97316', marginBottom: '20px' }}>Add New Product</h2>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <input 
-          type="text" placeholder="Product Name" required 
-          onChange={(e) => setFormData({...formData, name: e.target.value})} 
-          style={inputStyle} 
-        />
-        <textarea 
-          placeholder="Description" required rows="4"
-          onChange={(e) => setFormData({...formData, description: e.target.value})} 
-          style={inputStyle} 
-        />
-        <input 
-          type="number" placeholder="Price" required 
-          onChange={(e) => setFormData({...formData, price: e.target.value})} 
-          style={inputStyle} 
-        />
-        <input 
-          type="text" placeholder="Category" required 
-          onChange={(e) => setFormData({...formData, category: e.target.value})} 
-          style={inputStyle} 
-        />
-        <input 
-          type="number" placeholder="Stock Quantity" required 
-          onChange={(e) => setFormData({...formData, stock: e.target.value})} 
-          style={inputStyle} 
-        />
-        
-        <div style={{ padding: '15px', border: '1px dashed #f97316', borderRadius: '8px' }}>
-          <label style={{ display: 'block', marginBottom: '10px', color: '#a1a1aa' }}>Upload Product Image (Cloudinary)</label>
-          <input 
-            type="file" accept="image/*" required 
-            onChange={(e) => setImage(e.target.files[0])} 
-            style={{ color: '#fff' }}
-          />
+    <div className="admin-form-page">
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">Catalogue</span>
+          <h2>Add a product</h2>
+        </div>
+      </div>
+      <hr className="rule" />
+
+      <form onSubmit={handleSubmit} className="panel panel-pad admin-form">
+        <label>
+          <span>Product name</span>
+          <input type="text" required value={formData.name} onChange={set('name')} placeholder="e.g. Crème de la Mer" />
+        </label>
+
+        <label>
+          <span>Description</span>
+          <textarea required rows="4" value={formData.description} onChange={set('description')} placeholder="What it is and what it does" />
+        </label>
+
+        <div className="admin-form-row">
+          <label>
+            <span>Price (₹)</span>
+            <input type="number" min="0" required value={formData.price} onChange={set('price')} placeholder="32000" />
+            {formData.price && <small className="field-hint">Shows as {inr(Number(formData.price))}</small>}
+          </label>
+
+          <label>
+            <span>Stock</span>
+            <input type="number" min="0" required value={formData.stock} onChange={set('stock')} placeholder="8" />
+          </label>
         </div>
 
-        <button type="submit" disabled={loading} className="btn" style={{ marginTop: '10px' }}>
-          {loading ? 'Uploading & Creating...' : 'Publish Product'}
+        <label>
+          <span>Category</span>
+          <select required value={formData.category} onChange={set('category')}>
+            <option value="" disabled>Select a category</option>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+
+        <div className="upload-field">
+          <span className="upload-label">Product image</span>
+          {preview ? (
+            <div className="upload-preview">
+              <img src={preview} alt="Selected product" />
+              <button type="button" className="btn-remove" onClick={() => setImage(null)}>
+                Choose a different image
+              </button>
+            </div>
+          ) : (
+            <p className="field-hint">Portrait images look best — the card crops to 4:5.</p>
+          )}
+          <input type="file" accept="image/*" required={!image} onChange={(e) => setImage(e.target.files[0])} />
+          <small className="field-hint">Uploaded to Cloudinary on publish.</small>
+        </div>
+
+        <button type="submit" disabled={loading} className="btn">
+          {loading ? 'Uploading…' : 'Publish product'}
         </button>
       </form>
     </div>
   );
-};
-
-const inputStyle = {
-  padding: '12px',
-  background: '#09090b',
-  border: '1px solid #27272a',
-  borderRadius: '6px',
-  color: '#fff',
-  fontSize: '15px',
-  outline: 'none'
 };
 
 export default AddProduct;

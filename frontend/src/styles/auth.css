@@ -1,75 +1,80 @@
+/* ============================================================
+   Login / Register
+   ============================================================ */
+
 .auth-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 70vh;
+  min-height: 68vh;
+  padding: 20px 0;
 }
 
 .auth-form {
-  background: #18181b;
-  padding: 40px;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  background: var(--surface);
+  padding: clamp(32px, 5vw, 52px);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 18px;
+  border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
 }
 
+/* Bronze filament across the top edge */
 .auth-form::before {
   content: '';
   position: absolute;
   top: 0;
-  left: -50%;
-  width: 200%;
-  height: 4px;
-  background: linear-gradient(90deg, transparent, #f97316, transparent);
-  animation: shimmer 3s infinite linear;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
 
-@keyframes shimmer {
-  0% { transform: translateX(-50%); }
-  100% { transform: translateX(50%); }
-}
+.auth-form .eyebrow { text-align: center; margin-bottom: 0; }
 
 .auth-form h2 {
   text-align: center;
-  font-size: 2rem;
-  color: #fff;
-  margin-bottom: 10px;
+  font-size: 2.1rem;
+  margin-bottom: 6px;
 }
 
-.auth-form input {
-  padding: 15px;
-  background: #09090b;
-  border: 1px solid #27272a;
-  border-radius: 8px;
-  font-size: 15px;
-  color: #fff;
-  outline: none;
-  transition: all 0.3s ease;
-}
-
-.auth-form input:focus {
-  border-color: #f97316;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
-}
-
-.auth-form p {
+.auth-form > p {
   text-align: center;
-  margin-top: 15px;
-  color: #a1a1aa;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
 }
+
+.auth-form .btn { margin-top: 6px; }
 
 .auth-form a {
-  color: #f97316;
-  font-weight: 600;
+  color: var(--gold);
+  font-weight: 400;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s var(--ease);
 }
 
-.auth-form a:hover {
-  text-decoration: underline;
+.auth-form a:hover { border-bottom-color: var(--gold); }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin: 2px 0;
+}
+
+.auth-divider::before, .auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
