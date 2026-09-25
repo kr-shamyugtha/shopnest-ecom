@@ -20,7 +20,7 @@ secrets:
 # on a live `--set` at deploy time, which Argo CD's GitOps flow has no
 # equivalent for.
 workloadIdentity:
-  clientId: "3beeff69-98f3-43f1-95ed-28067bff16bd"
+  clientId: "0c79e780-2204-4fd1-80f2-c13da8fee025"
 ingress:
   # ingress-nginx's LoadBalancer (48.203.37.136) is directly reachable —
   # the earlier "Free Trial blocks inbound" diagnosis was wrong; the real
