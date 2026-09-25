@@ -1,12 +1,47 @@
+# ------------------------------------------------------------
+# Path filters: this pipeline builds and ships the APPLICATION, so it
+# runs only when something that ends up inside an image changes.
+#
+# Deliberately NOT listed:
+#   helm/**, argocd/**  - Argo CD watches these and syncs them itself;
+#                         rebuilding identical images for a chart edit
+#                         is pure waste.
+#   terraform/**        - covered by ci/terraform-pipeline.yml.
+#   *.md, kubernetes/** - docs and legacy manifests.
+#
+# Excluding helm/** also makes the DeployToAKS tag-bump commit (which
+# only touches helm/shopnest/environments/azure/dev.yaml) structurally
+# unable to re-trigger this pipeline. The [skip ci] in that commit
+# message is now a second line of defence rather than the only one.
+#
+# Caveat: a file missing from this list will silently not trigger a
+# build. If a change doesn't deploy, check here first.
+# ------------------------------------------------------------
 trigger:
   branches:
     include:
       - main
+  paths:
+    include:
+      - backend/**
+      - frontend/**
+      - ci/azure-pipelines.yml
+      - sonar-project.properties
+      - package.json
+      - package-lock.json
 
 pr:
   branches:
     include:
       - main
+  paths:
+    include:
+      - backend/**
+      - frontend/**
+      - ci/azure-pipelines.yml
+      - sonar-project.properties
+      - package.json
+      - package-lock.json
 
 pool:
   vmImage: ubuntu-latest
