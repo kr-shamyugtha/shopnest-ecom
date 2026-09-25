@@ -73,6 +73,7 @@ stages:
           # coverage/{lcov.info,cobertura-coverage.xml}; the reporter
           # formats and lcov path root live in each package.json "jest" block.
           - script: |
+              set -e
               cd backend
               npm ci
               npm test -- --ci --coverage --reporters=default --reporters=jest-junit
@@ -83,6 +84,7 @@ stages:
           # succeededOrFailed so a backend failure still leaves frontend
           # results in the Tests tab rather than hiding them.
           - script: |
+              set -e
               cd frontend
               npm ci
               npm test -- --watchAll=false --ci --coverage --reporters=default --reporters=jest-junit
