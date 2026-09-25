@@ -170,7 +170,7 @@ stages:
               set -e
 
               BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-              VERSION="1.0.$(Build.BuildId)"
+              VERSION="1.0.$(Build.BuildId)-$(cut -c1-7 <<< "$(Build.SourceVersion)")"
 
               BACKEND_IMAGE="shopnestacr2026.azurecr.io/shopnest-backend"
               FRONTEND_IMAGE="shopnestacr2026.azurecr.io/shopnest-frontend"
@@ -336,7 +336,7 @@ stages:
           - script: |
               set -e
 
-              VERSION="1.0.$(Build.BuildId)"
+              VERSION="1.0.$(Build.BuildId)-$(cut -c1-7 <<< "$(Build.SourceVersion)")"
               BACKEND_IMAGE="shopnestacr2026.azurecr.io/shopnest-backend:$VERSION"
 
               echo "================================================"
@@ -360,7 +360,7 @@ stages:
           - script: |
               set -e
 
-              VERSION="1.0.$(Build.BuildId)"
+              VERSION="1.0.$(Build.BuildId)-$(cut -c1-7 <<< "$(Build.SourceVersion)")"
               FRONTEND_IMAGE="shopnestacr2026.azurecr.io/shopnest-frontend:$VERSION"
 
               echo "================================================"
@@ -473,7 +473,7 @@ stages:
               inlineScript: |
                 set -euo pipefail
 
-                VERSION="1.0.$(Build.BuildId)"
+                VERSION="1.0.$(Build.BuildId)-$(cut -c1-7 <<< "$(Build.SourceVersion)")"
                 ACR_NAME="shopnestacr2026"
                 ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
 
@@ -561,7 +561,7 @@ stages:
                   exit 1
                 fi
 
-                VERSION="1.0.$(Build.BuildId)"
+                VERSION="1.0.$(Build.BuildId)-$(cut -c1-7 <<< "$(Build.SourceVersion)")"
                 CONFIG_FILE="helm/shopnest/environments/azure/dev.yaml"
 
                 echo "=============================================="
