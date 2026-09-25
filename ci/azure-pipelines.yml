@@ -69,17 +69,56 @@ stages:
             inputs:
               version: "20.x"
 
+          # Each suite writes test-results/junit.xml (jest-junit) and
+          # coverage/{lcov.info,cobertura-coverage.xml}; the reporter
+          # formats and lcov path root live in each package.json "jest" block.
           - script: |
               cd backend
               npm ci
-              npm test -- --ci
+              npm test -- --ci --coverage --reporters=default --reporters=jest-junit
             displayName: "Run Backend Tests"
+            env:
+              JEST_JUNIT_OUTPUT_DIR: test-results
 
+          # succeededOrFailed so a backend failure still leaves frontend
+          # results in the Tests tab rather than hiding them.
           - script: |
               cd frontend
               npm ci
-              npm test -- --watchAll=false
+              npm test -- --watchAll=false --ci --coverage --reporters=default --reporters=jest-junit
             displayName: "Run Frontend Tests"
+            condition: succeededOrFailed()
+            env:
+              JEST_JUNIT_OUTPUT_DIR: test-results
+
+          - task: PublishTestResults@2
+            displayName: "Publish Test Results"
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: "JUnit"
+              testResultsFiles: "*/test-results/junit.xml"
+              mergeTestResults: true
+              testRunTitle: "ShopNest Unit Tests"
+
+          - task: PublishCodeCoverageResults@2
+            displayName: "Publish Code Coverage"
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: "$(System.DefaultWorkingDirectory)/*/coverage/cobertura-coverage.xml"
+
+          # SonarCloud runs in a later stage on a fresh agent, so the lcov
+          # files are handed over as an artifact instead of being lost with
+          # this one. --parents keeps backend/… and frontend/… so the paths
+          # match sonar.javascript.lcov.reportPaths.
+          - script: |
+              mkdir -p "$(Build.ArtifactStagingDirectory)/coverage"
+              cp --parents backend/coverage/lcov.info frontend/coverage/lcov.info \
+                "$(Build.ArtifactStagingDirectory)/coverage/"
+            displayName: "Collect Coverage for SonarCloud"
+
+          - publish: "$(Build.ArtifactStagingDirectory)/coverage"
+            artifact: coverage
+            displayName: "Publish Coverage Artifact"
 
 
   # ============================================================
@@ -132,6 +171,14 @@ stages:
 
       steps:
         - checkout: self
+
+        # Drops backend/coverage/lcov.info and frontend/coverage/lcov.info
+        # into the checkout, where sonar-project.properties expects them.
+        - task: DownloadPipelineArtifact@2
+          displayName: "Download Coverage"
+          inputs:
+            artifact: coverage
+            path: "$(Build.SourcesDirectory)"
 
         - task: SonarCloudPrepare@3
           displayName: "Prepare SonarCloud Analysis"
