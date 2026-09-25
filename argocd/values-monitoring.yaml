@@ -1552,12 +1552,28 @@ applications:
                       resources:
                         requests:
                           storage: 2Gi
-              # NOTE: put the real Slack webhook URL in a Secret instead of
-              # committing it in plaintext here.
+                # Mounts the Secret below at
+                # /etc/alertmanager/secrets/shopnest-teams-webhook/, so the
+                # webhook URL lives in the cluster, not in this file or Git.
+                secrets:
+                  - shopnest-teams-webhook
+              # The Secret is created OUT OF BAND, the same way as
+              # grafana-admin-credentials above:
+              #
+              #   kubectl create secret generic shopnest-teams-webhook \
+              #     -n monitoring \
+              #     --from-literal=webhook-url='<Teams workflow webhook URL>'
+              #
+              # The URL comes from a Teams channel: ... -> Workflows ->
+              # "Post to a channel when a webhook request is received".
+              # Microsoft retired the old Office 365 Connector webhooks, so
+              # this Workflows-based URL is the current way in; msteamsv2
+              # is the receiver type built for it (the plain msteams_configs
+              # receiver targets the retired connector and won't work here).
               config:
                 global: {}
                 route:
-                  receiver: "shopnest-slack"
+                  receiver: "shopnest-teams"
                   group_by: ["alertname", "severity"]
                   group_wait: 30s
                   group_interval: 5m
@@ -1565,13 +1581,12 @@ applications:
                   routes:
                     - matchers:
                         - severity = critical
-                      receiver: "shopnest-slack"
+                      receiver: "shopnest-teams"
                       repeat_interval: 1h
                 receivers:
-                  - name: "shopnest-slack"
-                    slack_configs:
-                      - api_url: "https://hooks.slack.com/services/REPLACE/WITH/YOUR-WEBHOOK"
-                        channel: "#shopnest-alerts"
+                  - name: "shopnest-teams"
+                    msteamsv2_configs:
+                      - webhook_url_file: /etc/alertmanager/secrets/shopnest-teams-webhook/webhook-url
                         send_resolved: true
                         title: '{{ .CommonAnnotations.summary }}'
                         text: '{{ .CommonAnnotations.description }}'
@@ -1633,6 +1648,14 @@ applications:
                   memory: 128Mi
 
             prometheusOperator:
+              # Webhook TLS from cert-manager instead of the chart's
+              # admission-create/patch Helm-hook Jobs. Under Argo CD those
+              # Jobs race their own delete policy ("Job ... is missing, it
+              # might have been deleted"), the PreSync phase fails, and the
+              # sync aborts before the Prometheus CR is ever applied.
+              admissionWebhooks:
+                certManager:
+                  enabled: true
               resources:
                 requests:
                   cpu: 25m
