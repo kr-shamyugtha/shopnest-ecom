@@ -6,6 +6,11 @@ output "cluster_id" {
   value = azurerm_kubernetes_cluster.this.id
 }
 
+output "oidc_issuer_url" {
+  description = "OIDC issuer URL, for federating a new workload identity to a ServiceAccount on this cluster."
+  value       = azurerm_kubernetes_cluster.this.oidc_issuer_url
+}
+
 output "kubelet_identity_object_id" {
   value = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
 }

@@ -30,6 +30,19 @@ applications:
 
             atlantisUrl: https://atlantis.20.79.85.142.nip.io
 
+            # Without this, atlantis.yaml's custom `terragrunt` workflow and
+            # per-project apply_requirements would be silently rejected — a
+            # deliberate Atlantis security default, since letting any repo
+            # define its own shell steps is dangerous unless explicitly
+            # opted into. Scoped to just this one repo, not every repo
+            # Atlantis could ever see.
+            repoConfig: |
+              ---
+              repos:
+              - id: "dev.azure.com/kavitography/shopnest-ado/shopnest-ado"
+                allow_custom_workflows: true
+                allowed_overrides: ["apply_requirements", "workflow"]
+
             # Scoped to exactly this one repo, in both the current and
             # legacy Azure DevOps hostname forms — never a wildcard across
             # the whole org.
