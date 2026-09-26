@@ -4,11 +4,15 @@ version: 3
 # and shared holds the ACR and the CI identity. Widen this deliberately,
 # once it's settled which Azure credential the Atlantis server runs with
 # and what that credential should be allowed to touch.
+#
+# Apply requirements are deliberately not set here. Atlantis reads this
+# file from the PR's own branch, so a rule defined here could be removed by
+# the very PR it's meant to gate. They're set in the server-side repos.yaml
+# instead, which a PR can't override.
 projects:
   - name: dev-resource-group
     dir: terraform/azure/live/dev/germanywestcentral/resource-group
     workflow: terragrunt
-    apply_requirements: [approved]
     autoplan:
       when_modified:
         - "*.hcl"
@@ -17,7 +21,6 @@ projects:
   - name: dev-networking
     dir: terraform/azure/live/dev/germanywestcentral/networking
     workflow: terragrunt
-    apply_requirements: [approved]
     autoplan:
       when_modified:
         - "*.hcl"
@@ -26,7 +29,6 @@ projects:
   - name: dev-aks
     dir: terraform/azure/live/dev/germanywestcentral/aks
     workflow: terragrunt
-    apply_requirements: [approved]
     autoplan:
       when_modified:
         - "*.hcl"
@@ -36,7 +38,6 @@ projects:
   - name: dev-keyvault
     dir: terraform/azure/live/dev/germanywestcentral/keyvault
     workflow: terragrunt
-    apply_requirements: [approved]
     autoplan:
       when_modified:
         - "*.hcl"
@@ -45,7 +46,6 @@ projects:
   - name: dev-cert-manager
     dir: terraform/azure/live/dev/germanywestcentral/cert-manager
     workflow: terragrunt
-    apply_requirements: [approved]
     autoplan:
       when_modified:
         - "*.hcl"
@@ -54,7 +54,6 @@ projects:
   - name: dev-ingress-nginx
     dir: terraform/azure/live/dev/germanywestcentral/ingress-nginx
     workflow: terragrunt
-    apply_requirements: [approved]
     autoplan:
       when_modified:
         - "*.hcl"
