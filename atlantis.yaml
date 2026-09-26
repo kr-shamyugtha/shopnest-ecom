@@ -1,11 +1,9 @@
 version: 3
 
-# Only the dev units are registered — Atlantis's Azure identity is
-# dev-scoped only (see terraform/azure/modules/atlantis-identity). Adding
-# staging/prod/shared here now would just produce failed-plan comments on
-# unrelated PRs, since there's no credential that can touch those resource
-# groups yet. Add them once each environment has its own identity (or its
-# own Atlantis instance).
+# Only the dev units are registered. Staging/prod have never been applied
+# and shared holds the ACR and the CI identity. Widen this deliberately,
+# once it's settled which Azure credential the Atlantis server runs with
+# and what that credential should be allowed to touch.
 projects:
   - name: dev-resource-group
     dir: terraform/azure/live/dev/germanywestcentral/resource-group
@@ -62,20 +60,9 @@ projects:
         - "*.hcl"
         - "../../../../modules/ingress-nginx/**/*.tf"
 
-# dev-atlantis-identity is deliberately NOT registered here. It manages the
-# permissions of the identity Atlantis itself plans as — confirmed live: it
-# can authenticate fine, but can't even read its own existing role
-# assignment in shopnest-tfstate-rg (Storage Blob Data Contributor doesn't
-# include roleAssignments/read). Granting more permission to fix that isn't
-# the right move: an identity that could grant itself new role assignments
-# via a merged PR would be a privilege-escalation path. This one project
-# stays human-applied, always — see the ordered `terragrunt apply` steps
-# used to set it up.
-
 # Native Atlantis assumes plain `terraform`, but this repo is Terragrunt —
-# every project above uses this instead. The bundled (non-slim) Atlantis
-# image already includes a terraform binary on PATH; terragrunt (added via
-# an initContainer, see argocd/values-atlantis.yaml) just calls it.
+# every project above uses this instead. Both `terragrunt` and `terraform`
+# must be on the Atlantis server's PATH; terragrunt shells out to terraform.
 workflows:
   terragrunt:
     plan:
