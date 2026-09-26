@@ -70,6 +70,17 @@ applications:
                   url: http://loki-gateway.monitoring.svc.cluster.local
                   isDefault: false
 
+              # nip.io resolves any subdomain of an IP back to that IP, so
+              # this reaches ingress-nginx's existing LoadBalancer with no
+              # real DNS record needed. Only safe because this is a
+              # throwaway dev cluster — login is Grafana's own auth, with
+              # nothing in front of it.
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hosts:
+                  - grafana.20.79.85.142.nip.io
+
               # ------------------------------------------------------
               # ShopNest dashboard, provisioned as a file through Grafana's
               # dashboardProviders rather than through the chart's
@@ -1492,6 +1503,14 @@ applications:
                       }
             prometheus:
               enabled: true
+              # Same nip.io approach as Grafana's ingress above.
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hosts:
+                  - prometheus.20.79.85.142.nip.io
+                paths:
+                  - /
               prometheusSpec:
                 # THE MOST IMPORTANT SETTING IN THIS FILE.
                 # By default this chart's Prometheus only watches
