@@ -62,15 +62,15 @@ projects:
         - "*.hcl"
         - "../../../../modules/ingress-nginx/**/*.tf"
 
-  - name: dev-atlantis-identity
-    dir: terraform/azure/live/dev/germanywestcentral/atlantis-identity
-    workflow: terragrunt
-    apply_requirements: [approved]
-    autoplan:
-      when_modified:
-        - "*.hcl"
-        - "../../../../modules/atlantis-identity/**/*.tf"
-        - "../../../../modules/workload-identity/**/*.tf"
+# dev-atlantis-identity is deliberately NOT registered here. It manages the
+# permissions of the identity Atlantis itself plans as — confirmed live: it
+# can authenticate fine, but can't even read its own existing role
+# assignment in shopnest-tfstate-rg (Storage Blob Data Contributor doesn't
+# include roleAssignments/read). Granting more permission to fix that isn't
+# the right move: an identity that could grant itself new role assignments
+# via a merged PR would be a privilege-escalation path. This one project
+# stays human-applied, always — see the ordered `terragrunt apply` steps
+# used to set it up.
 
 # Native Atlantis assumes plain `terraform`, but this repo is Terragrunt —
 # every project above uses this instead. The bundled (non-slim) Atlantis

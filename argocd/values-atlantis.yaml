@@ -15,6 +15,36 @@ applications:
           values: |
             replicaCount: 1
 
+            # Federates this pod to shopnest-dev-atlantis-identity (see
+            # terraform/azure/modules/atlantis-identity) — no static Azure
+            # credential stored anywhere, a short-lived token is exchanged
+            # for the pod's own Kubernetes-issued identity at runtime. The
+            # client-id here is that identity's client_id output, not a
+            # secret — it identifies the identity but grants nothing
+            # without a token the cluster signs for this exact ServiceAccount.
+            podTemplate:
+              labels:
+                azure.workload.identity/use: "true"
+
+            serviceAccount:
+              annotations:
+                azure.workload.identity/client-id: "4c0f5102-fd6f-4d07-bccd-9060974dca42"
+
+            # The workload-identity webhook injects AZURE_* env vars, which
+            # app-level SDKs (like the backend's) read automatically — but
+            # Terraform's azurerm provider has its own auth resolution and
+            # specifically needs these ARM_*-prefixed ones instead. Per
+            # HashiCorp's AKS Workload Identity guide: ARM_USE_CLI must be
+            # false so it doesn't try (and fail) to shell out to az cli
+            # first. Identifiers, not secrets — safe here same as
+            # backend_identity_client_id elsewhere in this repo.
+            environment:
+              ARM_USE_AKS_WORKLOAD_IDENTITY: "true"
+              ARM_USE_CLI: "false"
+              ARM_SUBSCRIPTION_ID: "b68fc861-1d2b-40c3-a317-f09c80a001e6"
+              ARM_CLIENT_ID: "4c0f5102-fd6f-4d07-bccd-9060974dca42"
+              ARM_TENANT_ID: "1734f897-f9d3-41eb-a30c-60d092d8a5d8"
+
             # This cluster is already at ~90% CPU *requests* on its tighter
             # node (2-node D2s_v7, no room to add a 3rd) — kept as small as
             # the other lightweight components here (prometheus-operator,
