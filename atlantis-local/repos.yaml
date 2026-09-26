@@ -1,0 +1,12 @@
+# Server-side repo config. Rules set here can't be changed by a PR, unlike
+# atlantis.yaml, which Atlantis reads from the PR's own branch.
+repos:
+  - id: dev.azure.com/kavitography/shopnest-ado/shopnest-ado
+    # `mergeable`, not `approved`: Atlantis ignores approvals from a PR's
+    # author, so `approved` can never be met in a one-person project.
+    apply_requirements: [mergeable]
+    # atlantis.yaml defines the custom `terragrunt` workflow, so it may set
+    # `workflow` — but deliberately not `apply_requirements`, which would let
+    # a PR remove its own gate.
+    allow_custom_workflows: true
+    allowed_overrides: [workflow]

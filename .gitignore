@@ -36,3 +36,6 @@ terraform-backups/
 # Generated security scan output
 trivy.json
 frontend/build/
+
+# Atlantis (atlantis-local/) — only the .example belongs in git
+atlantis-local/secrets.env

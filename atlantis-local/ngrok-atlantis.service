@@ -1,0 +1,12 @@
+[Unit]
+Description=ngrok tunnel exposing Atlantis on its static domain
+After=network-online.target atlantis.service
+Wants=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/ngrok http --url=https://quarrel-skydiver-outsource.ngrok-free.dev 4141 --log=stdout --log-format=logfmt
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

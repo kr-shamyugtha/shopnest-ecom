@@ -1,0 +1,15 @@
+# Non-secret Atlantis server settings, installed to ~/.config/atlantis/.
+# Secrets come from secrets.env (see secrets.env.example); the repo-config
+# path is set in atlantis.service, which can refer to the home directory.
+atlantis-url: https://quarrel-skydiver-outsource.ngrok-free.dev
+port: 4141
+
+azuredevops-user: kavitography@gmail.com
+azuredevops-webhook-user: atlantis
+
+repo-allowlist: dev.azure.com/kavitography/shopnest-ado/shopnest-ado,kavitography.visualstudio.com/kavitography/shopnest-ado/shopnest-ado
+
+# The UI is reachable through the public ngrok URL; without this anyone
+# with the link could disable applies or release locks.
+web-basic-auth: true
+web-username: admin
