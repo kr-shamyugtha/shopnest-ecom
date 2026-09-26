@@ -32,22 +32,6 @@ server:
       cpu: 200m
       memory: 256Mi
 
-  # server.insecure drops TLS on the server's own listener, which switches
-  # its service to serve plain HTTP on port 80 — required so ingress-nginx
-  # (no TLS passthrough configured) can proxy to it at all. The UI's own
-  # login is still the only gate in front of it; same nip.io approach and
-  # tradeoff as Grafana/Prometheus in values-monitoring.yaml.
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hostname: argocd.20.79.85.142.nip.io
-    annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-
-configs:
-  params:
-    server.insecure: true
-
 repoServer:
   replicas: 1
   resources:
