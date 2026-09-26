@@ -89,6 +89,13 @@ applications:
               enabled: true
               ingressClassName: nginx
               host: atlantis.20.79.85.142.nip.io
+              # Chart defaults to path: /* (its own values.yaml says
+              # "Use / for nginx" right next to that field) — nginx doesn't
+              # treat "/*" as a wildcard without a separate use-regex
+              # annotation, so every request fell through to the default
+              # 404 backend until this was set explicitly.
+              path: /
+              pathType: Prefix
               annotations:
                 cert-manager.io/cluster-issuer: letsencrypt-prod
               tls:
