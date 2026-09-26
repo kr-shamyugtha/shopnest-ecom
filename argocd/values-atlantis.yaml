@@ -1,0 +1,123 @@
+applications:
+  atlantis:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    project: atlantis
+    sources:
+      - chart: atlantis
+        repoURL: https://runatlantis.github.io/helm-charts
+        targetRevision: 6.16.0
+        helm:
+          releaseName: atlantis
+          values: |
+            replicaCount: 1
+
+            # This cluster is already at ~90% CPU *requests* on its tighter
+            # node (2-node D2s_v7, no room to add a 3rd) — kept as small as
+            # the other lightweight components here (prometheus-operator,
+            # kube-state-metrics). Bump if plans start OOMKilling on larger
+            # Terragrunt units.
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 300m
+                memory: 512Mi
+
+            atlantisUrl: https://atlantis.20.79.85.142.nip.io
+
+            # Scoped to exactly this one repo, in both the current and
+            # legacy Azure DevOps hostname forms — never a wildcard across
+            # the whole org.
+            orgAllowlist: "dev.azure.com/kavitography/shopnest-ado/shopnest-ado,kavitography.visualstudio.com/kavitography/shopnest-ado/shopnest-ado"
+
+            # Credentials live in the atlantis-vcs Secret, created out of
+            # band the same way as grafana-admin-credentials and
+            # shopnest-teams-webhook — never committed here.
+            #   kubectl create secret generic atlantis-vcs -n atlantis \
+            #     --from-literal=azuredevops_token='<PAT>' \
+            #     --from-literal=azuredevops_webhook_password='<webhook secret>'
+            vcsSecretName: atlantis-vcs
+            azuredevops:
+              user: kavitography@gmail.com
+              # Not a real account — just a shared label both sides (this
+              # config and the Azure DevOps Service Hook, set up later)
+              # agree on for the Basic Auth pair guarding the webhook.
+              webhookUser: atlantis
+
+            # This repo is Terragrunt, not plain Terraform — Atlantis's
+            # native workflow only knows how to run `terraform` directly, so
+            # every project in atlantis.yaml needs a custom `terragrunt`
+            # workflow instead (added when atlantis.yaml itself is added).
+            # The binary isn't in the upstream image, so it's fetched here
+            # and handed to the main container over a shared emptyDir,
+            # rather than maintaining a custom Atlantis image just for this
+            # one binary. Pinned to match the version already used
+            # everywhere else in this project.
+            initContainers:
+              - name: install-terragrunt
+                image: alpine:3.20
+                command: ["sh", "-c"]
+                # wget (busybox, bundled) rather than curl — apk add fails
+                # here with "Permission denied": this chart runs every
+                # container as non-root, and apk needs root to touch its
+                # package database.
+                args:
+                  - |
+                    set -e
+                    wget -qO /shared/terragrunt \
+                      https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.2/terragrunt_linux_amd64
+                    chmod +x /shared/terragrunt
+                volumeMounts:
+                  - name: terragrunt-bin
+                    mountPath: /shared
+
+            extraVolumes:
+              - name: terragrunt-bin
+                emptyDir: {}
+
+            extraVolumeMounts:
+              - name: terragrunt-bin
+                mountPath: /usr/local/bin/terragrunt
+                subPath: terragrunt
+
+            ingress:
+              enabled: true
+              ingressClassName: nginx
+              host: atlantis.20.79.85.142.nip.io
+              annotations:
+                cert-manager.io/cluster-issuer: letsencrypt-prod
+              tls:
+                - secretName: atlantis-tls
+                  hosts:
+                    - atlantis.20.79.85.142.nip.io
+
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: atlantis
+    syncPolicy:
+      syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+
+projects:
+  atlantis:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    permitOnlyProjectScopedClusters: false
+    description: Atlantis Terraform/Terragrunt automation
+    sourceRepos:
+      - https://runatlantis.github.io/helm-charts
+    destinations:
+      - namespace: atlantis
+        server: https://kubernetes.default.svc
+    clusterResourceWhitelist:
+      - group: ""
+        kind: Namespace

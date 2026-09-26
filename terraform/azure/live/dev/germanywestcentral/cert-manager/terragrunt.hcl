@@ -16,6 +16,7 @@ dependency "aks" {
 }
 
 inputs = {
-  cluster_host           = dependency.aks.outputs.host
-  cluster_ca_certificate = dependency.aks.outputs.cluster_ca_certificate
+  cluster_host             = dependency.aks.outputs.host
+  cluster_ca_certificate   = dependency.aks.outputs.cluster_ca_certificate
+  acme_registration_email  = "kavitography@gmail.com"
 }

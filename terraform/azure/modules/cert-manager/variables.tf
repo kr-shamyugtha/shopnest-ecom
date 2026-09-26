@@ -20,3 +20,8 @@ variable "chart_version" {
   type    = string
   default = "v1.16.2"
 }
+
+variable "acme_registration_email" {
+  description = "Contact email for Let's Encrypt account registration and renewal notices."
+  type        = string
+}
