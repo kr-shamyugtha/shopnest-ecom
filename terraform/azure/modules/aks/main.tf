@@ -36,13 +36,16 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
   # UserAssigned (not SystemAssigned) is required by the provider whenever a
-  # custom kubelet_identity is set below. This one, unlike the kubelet
-  # identity, doesn't need to survive a destroy — nothing outside this
-  # cluster's own resource group depends on its principal_id, so it's fine
-  # for it to be ephemeral and torn down with the cluster.
+  # custom kubelet_identity is set below. Fixed to the identity created once
+  # in the shared kubelet-identity unit, not created here — Azure requires
+  # this identity to hold "Managed Identity Operator" on the kubelet identity
+  # before it will let the control plane assign it to the cluster's nodes,
+  # and that grant is scoped inside shopnest-shared-rg's CanNotDelete lock.
+  # See kubelet-identity/main.tf for why that role assignment (and so this
+  # identity) has to be shared rather than recreated with every cluster.
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.cluster.id]
+    identity_ids = [var.cluster_identity_id]
   }
 
   # Fixes the kubelet identity to the one created once in the shared unit
@@ -78,13 +81,6 @@ resource "azurerm_kubernetes_cluster" "this" {
   # EKS later), not just a workaround for the capacity constraint.
 
   tags = var.tags
-}
-
-resource "azurerm_user_assigned_identity" "cluster" {
-  name                = "${var.project_name}-${var.environment}-aks-identity"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  tags                = var.tags
 }
 
 # ==========================================================

@@ -23,6 +23,11 @@ variable "kubelet_identity_id" {
   type        = string
 }
 
+variable "cluster_identity_id" {
+  description = "Resource ID of the shared control-plane identity (terraform/azure/live/shared/germanywestcentral/kubelet-identity), already granted Managed Identity Operator on the kubelet identity once."
+  type        = string
+}
+
 variable "kubelet_identity_client_id" {
   type = string
 }

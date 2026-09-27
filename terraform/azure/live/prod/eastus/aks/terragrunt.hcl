@@ -35,9 +35,11 @@ dependency "networking" {
 dependency "kubelet_identity" {
   config_path = "../../../shared/germanywestcentral/kubelet-identity"
   mock_outputs = {
-    id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-kubelet-identity"
-    client_id    = "00000000-0000-0000-0000-000000000000"
-    principal_id = "00000000-0000-0000-0000-000000000000"
+    id                            = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-kubelet-identity"
+    client_id                     = "00000000-0000-0000-0000-000000000000"
+    principal_id                  = "00000000-0000-0000-0000-000000000000"
+    cluster_identity_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-cluster-identity"
+    cluster_identity_principal_id = "00000000-0000-0000-0000-000000000000"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -51,6 +53,7 @@ inputs = {
   kubelet_identity_id        = dependency.kubelet_identity.outputs.id
   kubelet_identity_client_id = dependency.kubelet_identity.outputs.client_id
   kubelet_identity_object_id = dependency.kubelet_identity.outputs.principal_id
+  cluster_identity_id        = dependency.kubelet_identity.outputs.cluster_identity_id
   admin_group_object_ids = [
     "91f40ba8-7d31-44c8-a2f2-371aa2b61e31" # shopnest-aks-admins-prod
   ]

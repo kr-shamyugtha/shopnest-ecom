@@ -25,3 +25,27 @@ resource "azurerm_role_assignment" "acr_pull" {
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.kubelet.principal_id
 }
+
+# AKS's control-plane identity, shared across every environment's cluster for
+# the same reason as the kubelet identity above: a user-assigned identity
+# used outside a cluster's own node resource group needs a "Managed Identity
+# Operator" role assignment scoped to the kubelet identity (Azure requires
+# this before it will let the control plane assign a custom kubelet identity
+# to the cluster's nodes), and that assignment lives under this resource
+# group's CanNotDelete lock. Keeping the control-plane identity per-cluster
+# would mean granting this role fresh, inside the locked group, on every
+# rebuild — the exact class of destroy-blocking problem the kubelet identity
+# above already solves. Making it shared and granting the role once here
+# avoids it for both identities.
+resource "azurerm_user_assigned_identity" "cluster" {
+  name                = "${var.project_name}-aks-cluster-identity"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azurerm_role_assignment" "cluster_can_operate_kubelet" {
+  scope                = azurerm_user_assigned_identity.kubelet.id
+  role_definition_name = "Managed Identity Operator"
+  principal_id         = azurerm_user_assigned_identity.cluster.principal_id
+}
