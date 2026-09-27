@@ -12,7 +12,13 @@ output "oidc_issuer_url" {
 }
 
 output "kubelet_identity_object_id" {
-  value = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+  description = "Now just echoes var.kubelet_identity_object_id — the identity is fixed by the kubelet_identity block, not auto-generated."
+  value       = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+}
+
+output "cluster_identity_principal_id" {
+  description = "Object ID of the cluster's own (control-plane) managed identity — not the kubelet identity."
+  value       = azurerm_user_assigned_identity.cluster.principal_id
 }
 
 output "keyvault_secrets_provider_client_id" {

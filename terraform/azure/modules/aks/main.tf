@@ -35,8 +35,25 @@ resource "azurerm_kubernetes_cluster" "this" {
     mode = "Manual"
   }
 
+  # UserAssigned (not SystemAssigned) is required by the provider whenever a
+  # custom kubelet_identity is set below. This one, unlike the kubelet
+  # identity, doesn't need to survive a destroy — nothing outside this
+  # cluster's own resource group depends on its principal_id, so it's fine
+  # for it to be ephemeral and torn down with the cluster.
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.cluster.id]
+  }
+
+  # Fixes the kubelet identity to the one created once in the shared unit
+  # (terraform/azure/modules/kubelet-identity), instead of the auto-generated
+  # one AKS creates when this block is omitted. That auto-generated identity
+  # is destroyed and recreated with every cluster, which is exactly the
+  # problem this avoids — see kubelet-identity/main.tf for why.
+  kubelet_identity {
+    client_id                 = var.kubelet_identity_client_id
+    object_id                 = var.kubelet_identity_object_id
+    user_assigned_identity_id = var.kubelet_identity_id
   }
 
   network_profile {
@@ -63,6 +80,13 @@ resource "azurerm_kubernetes_cluster" "this" {
   tags = var.tags
 }
 
+resource "azurerm_user_assigned_identity" "cluster" {
+  name                = "${var.project_name}-${var.environment}-aks-identity"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
 # ==========================================================
 # CI/CD Pipeline Access (narrower than admin_group_object_ids)
 # ==========================================================
@@ -81,13 +105,6 @@ resource "azurerm_role_assignment" "ci_aks_rbac_writer" {
   scope                = azurerm_kubernetes_cluster.this.id
   role_definition_name = "Azure Kubernetes Service RBAC Writer"
   principal_id         = var.ci_principal_id
-}
-
-resource "azurerm_role_assignment" "aks_acr_pull" {
-  scope                            = var.acr_id
-  role_definition_name             = "AcrPull"
-  principal_id                     = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
-  skip_service_principal_aad_check = true
 }
 
 # ==========================================================
