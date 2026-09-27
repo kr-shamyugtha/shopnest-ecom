@@ -1932,6 +1932,21 @@ applications:
       server: https://kubernetes.default.svc
       namespace: monitoring
     syncPolicy:
+      # Same as the shopnest app: Argo CD reconciles whatever Git says, with
+      # no manual sync after a rebuild. The first-sync failures seen before
+      # (client-side apply on the large Prometheus CRDs, the admission-webhook
+      # hook Jobs) are fixed by ServerSideApply and certManager above; retry
+      # covers the ordering races left on a fresh cluster, e.g. CRDs not yet
+      # established when the Prometheus CR is applied.
+      automated:
+        selfHeal: true
+        prune: true
+      retry:
+        limit: 5
+        backoff:
+          duration: 30s
+          factor: 2
+          maxDuration: 5m
       syncOptions:
         - CreateNamespace=true
         - ServerSideApply=true
