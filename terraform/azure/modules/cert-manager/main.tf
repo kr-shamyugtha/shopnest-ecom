@@ -12,55 +12,10 @@ resource "helm_release" "cert_manager" {
   }
 }
 
-# Self-signed — no real domain exists yet, so a trusted Let's Encrypt issuer
-# isn't achievable. Swap this for an ACME issuer once a real domain exists.
-resource "kubernetes_manifest" "selfsigned_cluster_issuer" {
-  manifest = {
-    apiVersion = "cert-manager.io/v1"
-    kind       = "ClusterIssuer"
-    metadata = {
-      name = "selfsigned-issuer"
-    }
-    spec = {
-      selfSigned = {}
-    }
-  }
-
-  depends_on = [helm_release.cert_manager]
-}
-
-# Real, publicly-trusted cert — needed for Atlantis's Azure DevOps webhook,
-# which requires HTTPS with a certificate the caller (dev.azure.com) will
-# actually trust; the self-signed issuer above doesn't qualify. Works with a
-# nip.io hostname since Let's Encrypt's HTTP-01 challenge only needs a real,
-# reachable IP to serve the challenge token from — no purchased domain
-# required.
-resource "kubernetes_manifest" "letsencrypt_cluster_issuer" {
-  manifest = {
-    apiVersion = "cert-manager.io/v1"
-    kind       = "ClusterIssuer"
-    metadata = {
-      name = "letsencrypt-prod"
-    }
-    spec = {
-      acme = {
-        server = "https://acme-v02.api.letsencrypt.org/directory"
-        email  = var.acme_registration_email
-        privateKeySecretRef = {
-          name = "letsencrypt-prod-account-key"
-        }
-        solvers = [
-          {
-            http01 = {
-              ingress = {
-                ingressClassName = "nginx"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-
-  depends_on = [helm_release.cert_manager]
-}
+# The two ClusterIssuers that depend on this chart's CRDs live in the
+# cert-manager-issuers module/unit instead, applied as a separate Terragrunt
+# unit right after this one. kubernetes_manifest validates a manifest
+# against the live API server's CRD schema at plan time — in the same
+# apply as the chart that installs that CRD, the plan runs before the CRD
+# exists and fails every time, and depends_on can't fix it since it only
+# orders applies, not the plan-time check. See that module for the rest.

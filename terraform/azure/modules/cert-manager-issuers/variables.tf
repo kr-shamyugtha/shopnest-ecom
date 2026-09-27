@@ -16,7 +16,7 @@ variable "aks_aad_server_app_id" {
   default     = "6dae42f8-4368-4678-94ff-3960e28e3630"
 }
 
-variable "chart_version" {
-  type    = string
-  default = "v1.16.2"
+variable "acme_registration_email" {
+  description = "Contact email for Let's Encrypt account registration and renewal notices."
+  type        = string
 }

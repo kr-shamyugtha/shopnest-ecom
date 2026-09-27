@@ -67,6 +67,18 @@ projects:
         - "*.hcl"
         - "../../../../modules/cert-manager/**/*.tf"
 
+  # Split from dev-cert-manager: the ClusterIssuer CRD this unit's resources
+  # need only exists once cert-manager's own apply (not just its plan) has
+  # actually run — see modules/cert-manager-issuers/main.tf. Always plan and
+  # apply this one after dev-cert-manager, never together.
+  - name: dev-cert-manager-issuers
+    dir: terraform/azure/live/dev/germanywestcentral/cert-manager-issuers
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/cert-manager-issuers/**/*.tf"
+
   - name: dev-ingress-nginx
     dir: terraform/azure/live/dev/germanywestcentral/ingress-nginx
     workflow: terragrunt
