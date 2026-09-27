@@ -62,11 +62,23 @@ projects:
 # Native Atlantis assumes plain `terraform`, but this repo is Terragrunt —
 # every project above uses this instead. Both `terragrunt` and `terraform`
 # must be on the Atlantis server's PATH; terragrunt shells out to terraform.
+#
+# `atlantis plan -p <project> -- -destroy` produces a destroy plan; apply it
+# with the usual `atlantis apply -p <project>`. Atlantis hands anything after
+# `--` to this step as COMMENT_ARGS, every character backslash-escaped
+# (`-destroy` arrives as \-\d\e\s\t\r\o\y). Only that exact flag is accepted;
+# anything else fails the plan, so a PR comment can't inject other flags.
 workflows:
   terragrunt:
     plan:
       steps:
-        - run: terragrunt plan -no-color -out $PLANFILE
+        - run: |
+            case "$COMMENT_ARGS" in
+              "")                 extra="" ;;
+              '\-\d\e\s\t\r\o\y') extra="-destroy" ;;
+              *) printf '%s\n' "Only '-- -destroy' is supported after 'atlantis plan' (got: $COMMENT_ARGS)" >&2; exit 1 ;;
+            esac
+            terragrunt plan -no-color $extra -out "$PLANFILE"
     apply:
       steps:
         - run: terragrunt apply -no-color $PLANFILE

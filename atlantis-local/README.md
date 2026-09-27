@@ -49,5 +49,9 @@ date Atlantis can't parse. A real PR is the reliable check.
 - Logs: `journalctl --user -u atlantis -u ngrok-atlantis -f`
 - Restart after editing config: `systemctl --user restart atlantis`
 - Web UI: the URL above, user `admin`, password `ATLANTIS_WEB_PASSWORD`.
+- Destroy a unit: comment `atlantis plan -p <project> -- -destroy`, check the
+  plan says "to destroy", then `atlantis apply -p <project>`. For several
+  units, go one at a time in reverse dependency order (ingress-nginx,
+  cert-manager, keyvault, aks, networking, resource-group).
 - Plans failing with an Azure auth error after a long idle period means the
   CLI login expired: run `az login`.
