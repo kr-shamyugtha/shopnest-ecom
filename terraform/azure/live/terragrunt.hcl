@@ -59,6 +59,13 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.0"
     }
+    # Only actually used by the argocd unit, to generate the Grafana admin
+    # password once and keep it fixed thereafter — same reasoning as
+    # helm/kubernetes above.
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 VERSIONS

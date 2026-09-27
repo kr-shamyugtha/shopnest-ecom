@@ -43,6 +43,22 @@ projects:
         - "*.hcl"
         - "../../../../modules/keyvault/**/*.tf"
 
+  - name: dev-argocd
+    dir: terraform/azure/live/dev/germanywestcentral/argocd
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/argocd/**/*.tf"
+        # Terraform reads these files directly (file()), so a values-only
+        # change should trigger a plan the same way a .tf change would.
+        # 6 levels up from this project's dir, not 5 — verified with
+        # os.path.normpath rather than counted by eye, after getting this
+        # wrong on the first attempt.
+        - "../../../../../../argocd/install-values.yaml"
+        - "../../../../../../argocd/values.yaml"
+        - "../../../../../../argocd/values-monitoring.yaml"
+
   - name: dev-cert-manager
     dir: terraform/azure/live/dev/germanywestcentral/cert-manager
     workflow: terragrunt
