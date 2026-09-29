@@ -1,18 +1,3 @@
-# Everything that used to be a sequence of manual helm/kubectl commands
-# after every cluster rebuild: install Argo CD, give it the repo credential,
-# install the argocd-apps wrapper (which defines the shopnest and monitoring
-# Applications), and the two Secrets the monitoring stack needs before its
-# first sync. Atlantis can now apply this like any other unit.
-#
-# Two of the three secrets it needs are genuinely external credentials
-# (an Azure DevOps PAT, a Teams webhook URL) that nothing in Terraform can
-# generate — they must be seeded into Key Vault once, by hand, before this
-# unit's first apply. See the data sources below for the exact names.
-# Everything after that first seed is fully automatic, including across a
-# full destroy/recreate of this environment, since the values live in
-# Key Vault (which soft-delete recovers) and, for the Grafana password
-# below, in Terraform state too (which lives in shopnest-tfstate-rg and is
-# never destroyed with the rest of the environment).
 
 data "azurerm_key_vault_secret" "ado_repo_pat" {
   name         = "ado-repo-pat"
@@ -24,25 +9,19 @@ data "azurerm_key_vault_secret" "teams_webhook_url" {
   key_vault_id = var.key_vault_id
 }
 
-# Generated once; the value then lives in Terraform state (shopnest-tfstate-rg,
-# never destroyed) and is written back to Key Vault on every apply, so the
-# same password survives a full environment teardown with no manual step —
-# unlike the two data sources above, which are genuinely external and can't
-# be generated here.
-#
-# Writing this secret needs Key Vault Secrets Officer on whoever runs this
-# module (Contributor alone doesn't cover Key Vault's data plane). Fine for
-# now since Atlantis currently runs as a subscription Owner; would need an
-# explicit grant if that ever narrows to a dedicated Atlantis identity.
 resource "random_password" "grafana_admin" {
   length  = 24
   special = false
 }
 
 resource "azurerm_key_vault_secret" "grafana_admin_password" {
+  # checkov:skip=CKV_AZURE_41: No expiry on purpose. Key Vault refuses to serve an expired secret, and
+  # nothing rotates this password yet, so a fixed date would break Grafana login when it passed.
+  # Revisit when rotation exists (e.g. time_rotating feeding random_password keepers).
   name         = "grafana-admin-password"
   value        = random_password.grafana_admin.result
   key_vault_id = var.key_vault_id
+  content_type = "password"
 }
 
 resource "helm_release" "argocd" {
@@ -56,9 +35,6 @@ resource "helm_release" "argocd" {
   values = [var.install_values]
 }
 
-# argocd.argoproj.io/secret-type: repository is how Argo CD recognizes this
-# as a repo credential rather than an ordinary Secret — see the comment in
-# argocd/values.yaml on why the URL needs credentials at all (private repo).
 resource "kubernetes_secret" "ado_repo" {
   metadata {
     name      = "shopnest-ado-repo"
