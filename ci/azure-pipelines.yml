@@ -1,22 +1,8 @@
-# ------------------------------------------------------------
-# Path filters: this pipeline builds and ships the APPLICATION, so it
-# runs only when something that ends up inside an image changes.
-#
-# Deliberately NOT listed:
-#   helm/**, argocd/**  - Argo CD watches these and syncs them itself;
-#                         rebuilding identical images for a chart edit
-#                         is pure waste.
-#   terraform/**        - covered by ci/terraform-pipeline.yml.
-#   *.md, kubernetes/** - docs and legacy manifests.
-#
-# Excluding helm/** also makes the DeployToAKS tag-bump commit (which
-# only touches helm/shopnest/environments/azure/dev.yaml) structurally
-# unable to re-trigger this pipeline. The [skip ci] in that commit
-# message is now a second line of defence rather than the only one.
-#
-# Caveat: a file missing from this list will silently not trigger a
-# build. If a change doesn't deploy, check here first.
-# ------------------------------------------------------------
+# Path filters: builds only when something that goes into an image changes.
+# Left out on purpose: helm/** and argocd/** (Argo CD syncs them itself), terraform/** (own pipeline), *.md, kubernetes/**.
+# Excluding helm/** also keeps DeployToAKS's tag-bump commit from re-triggering this ([skip ci] is the backup).
+# A path missing here never triggers a build, so check this list first if a change doesn't deploy.
+
 trigger:
   branches:
     include:
@@ -69,9 +55,7 @@ stages:
             inputs:
               version: "20.x"
 
-          # Each suite writes test-results/junit.xml (jest-junit) and
-          # coverage/{lcov.info,cobertura-coverage.xml}; the reporter
-          # formats and lcov path root live in each package.json "jest" block.
+          # Each suite writes test-results/junit.xml and coverage/ (lcov + cobertura); reporters and lcov root are in each package.json "jest" block.
           - script: |
               set -e
               cd backend
@@ -81,8 +65,7 @@ stages:
             env:
               JEST_JUNIT_OUTPUT_DIR: test-results
 
-          # succeededOrFailed so a backend failure still leaves frontend
-          # results in the Tests tab rather than hiding them.
+          # succeededOrFailed: a backend failure must not hide the frontend results.
           - script: |
               set -e
               cd frontend
@@ -108,10 +91,8 @@ stages:
             inputs:
               summaryFileLocation: "$(System.DefaultWorkingDirectory)/*/coverage/cobertura-coverage.xml"
 
-          # SonarCloud runs in a later stage on a fresh agent, so the lcov
-          # files are handed over as an artifact instead of being lost with
-          # this one. --parents keeps backend/… and frontend/… so the paths
-          # match sonar.javascript.lcov.reportPaths.
+          # Sonar runs in a later stage on a fresh agent, so the lcov files travel as an artifact.
+          # --parents keeps backend/ and frontend/ so the paths match sonar.javascript.lcov.reportPaths.
           - script: |
               mkdir -p "$(Build.ArtifactStagingDirectory)/coverage"
               cp --parents backend/coverage/lcov.info frontend/coverage/lcov.info \
@@ -157,7 +138,8 @@ stages:
               npm ci
               npm run build
             displayName: "Build Frontend"
-            
+
+
   # ============================================================
   # Stage 3: SonarCloud Code Quality
   # ============================================================
@@ -174,8 +156,7 @@ stages:
       steps:
         - checkout: self
 
-        # Drops backend/coverage/lcov.info and frontend/coverage/lcov.info
-        # into the checkout, where sonar-project.properties expects them.
+        # Puts backend/coverage/lcov.info and frontend/coverage/lcov.info where sonar-project.properties expects them.
         - task: DownloadPipelineArtifact@2
           displayName: "Download Coverage"
           inputs:
@@ -197,6 +178,7 @@ stages:
           displayName: "Publish SonarCloud Quality Gate"
           inputs:
             pollingTimeoutSec: "300"
+
 
   # ============================================================
   # Stage 4: Docker Build
@@ -298,15 +280,14 @@ stages:
               echo "Docker images successfully built and saved."
             displayName: "Build and Save Docker Images"
 
-          # ======================================================
-          # Publish exact Docker images for the SecurityScan stage
-          # ======================================================
+          # Publish the exact images built here so SecurityScan and PushToACR use the same bits.
           - task: PublishPipelineArtifact@1
             displayName: "Publish Docker Images"
             inputs:
               targetPath: "$(Build.ArtifactStagingDirectory)/docker-images"
               artifact: "docker-images"
               publishLocation: "pipeline"
+
 
   # ============================================================
   # Stage 5: Container Security Scan - Trivy
@@ -325,18 +306,12 @@ stages:
 
           - checkout: none
 
-          # ----------------------------------------------------
-          # Download Docker image artifacts
-          # ----------------------------------------------------
           - task: DownloadPipelineArtifact@2
             displayName: "Download Docker Images"
             inputs:
               artifact: docker-images
               path: "$(Pipeline.Workspace)/docker-images"
 
-          # ----------------------------------------------------
-          # Load Docker images into the Docker daemon
-          # ----------------------------------------------------
           - script: |
               set -e
 
@@ -353,9 +328,6 @@ stages:
               docker images | grep "shopnestacr2026.azurecr.io/shopnest-"
             displayName: "Load Docker Images"
 
-          # ----------------------------------------------------
-          # Install Trivy
-          # ----------------------------------------------------
           - script: |
               set -e
 
@@ -379,9 +351,6 @@ stages:
               trivy --version
             displayName: "Install Trivy"
 
-          # ----------------------------------------------------
-          # Scan Backend
-          # ----------------------------------------------------
           - script: |
               set -e
 
@@ -403,9 +372,6 @@ stages:
 
             displayName: "Trivy Scan - Backend"
 
-          # ----------------------------------------------------
-          # Scan Frontend
-          # ----------------------------------------------------
           - script: |
               set -e
 
@@ -427,6 +393,7 @@ stages:
 
             displayName: "Trivy Scan - Frontend"
 
+
   # ============================================================
   # Stage 6: Push Images to ACR
   # ============================================================
@@ -434,8 +401,7 @@ stages:
     displayName: "Push Docker Images to ACR"
 
     dependsOn: SecurityScan
-    # PR runs stop here — no point pushing images from unreviewed,
-    # unmerged code to the shared registry.
+    # PR runs stop here: unmerged code shouldn't be pushed to the shared registry.
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
 
     jobs:
@@ -444,18 +410,13 @@ stages:
 
         steps:
 
-          # ----------------------------------------------------
-          # Download the EXACT images that were built and scanned
-          # ----------------------------------------------------
+          # Uses the exact images that were built and scanned, not a rebuild.
           - task: DownloadPipelineArtifact@2
             displayName: "Download Scanned Docker Images"
             inputs:
               artifact: docker-images
               path: "$(Pipeline.Workspace)/docker-images"
 
-          # ----------------------------------------------------
-          # Load images into Docker
-          # ----------------------------------------------------
           - script: |
               set -euo pipefail
 
@@ -510,9 +471,7 @@ stages:
 
             displayName: "Load Docker Images"
 
-          # ----------------------------------------------------
-          # Authenticate using Azure OIDC
-          # ----------------------------------------------------
+          # Azure login goes through the OIDC service connection, so no stored secret.
           - task: AzureCLI@2
             displayName: "Login to Azure and Push Images"
             inputs:
@@ -554,6 +513,7 @@ stages:
                 echo "$BACKEND_IMAGE"
                 echo "$FRONTEND_IMAGE"
 
+
   # ============================================================
   # Stage 7: Update GitOps config (Argo CD deploys, not this pipeline)
   # ============================================================
@@ -561,8 +521,7 @@ stages:
     displayName: "Update GitOps Config for AKS"
 
     dependsOn: PushToACR
-    # Same reasoning as PushToACR — a PR shouldn't be able to commit to
-    # the GitOps config and trigger a real deploy before it's even merged.
+    # Same as PushToACR: a PR must not commit to the GitOps config and trigger a deploy.
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
 
     jobs:
@@ -575,17 +534,8 @@ stages:
             displayName: "Checkout Source Code"
             persistCredentials: true
 
-          # ----------------------------------------------------
-          # Fetch the identity AND update the config in one step.
-          # Merged deliberately: passing the fetched value to a separate
-          # step via a pipeline variable ($(VAR) macro) is ambiguous with
-          # bash's own $(...) command-substitution syntax, and can
-          # silently misbehave if the macro substitution doesn't fire —
-          # a plain bash variable used within the same script has no such
-          # ambiguity. A `git pull --rebase` guards against two runs
-          # racing to push (which would otherwise risk a rejected push,
-          # or worse, overwriting a correct commit with a stale one).
-          # ----------------------------------------------------
+          # Fetch and update are one step on purpose: passing the value between steps as $(VAR) clashes with bash's
+          # $(...) and can silently come out empty.
           - task: AzureCLI@2
             displayName: "Fetch Identity and Update GitOps Config"
             inputs:
@@ -644,9 +594,6 @@ stages:
 
                 git commit -m "ci: bump dev image tag to $VERSION [skip ci]"
 
-                # Guard against a second pipeline run having pushed in
-                # the meantime — rebase onto whatever's actually on main
-                # right now before pushing, rather than risking a
-                # rejected push or a silently stale push.
+                # Rebase onto main first so a concurrent run's push isn't rejected or overwritten by a stale commit.
                 git pull --rebase origin main
                 git push origin HEAD:main
