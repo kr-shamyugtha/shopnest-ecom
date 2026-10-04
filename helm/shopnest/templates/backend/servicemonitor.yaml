@@ -27,16 +27,12 @@ metadata:
     # which matches on the monitoring release label. Belt and braces: it
     # works whether or not the selector override above is in place.
     release: monitoring
-    app.kubernetes.io/name: shopnest-backend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: backend
+    {{- include "shopnest.labels" (dict "component" "backend") | nindent 4 }}
 
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: shopnest-backend
-      app.kubernetes.io/part-of: shopnest
-      app.kubernetes.io/component: backend
+      {{- include "shopnest.labels" (dict "component" "backend") | nindent 6 }}
 
   endpoints:
     - port: http

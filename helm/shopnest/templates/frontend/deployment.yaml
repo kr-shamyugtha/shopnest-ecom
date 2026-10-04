@@ -3,10 +3,8 @@ kind: Deployment
 metadata:
   name: shopnest-frontend
   labels:
-    app: shopnest-frontend
-    app.kubernetes.io/name: shopnest-frontend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: frontend
+    {{- include "shopnest.selectorLabels" (dict "component" "frontend") | nindent 4 }}
+    {{- include "shopnest.labels" (dict "component" "frontend") | nindent 4 }}
 
 spec:
   {{- if not .Values.frontend.autoscaling.enabled }}
@@ -22,15 +20,13 @@ spec:
 
   selector:
     matchLabels:
-      app: shopnest-frontend
+      {{- include "shopnest.selectorLabels" (dict "component" "frontend") | nindent 6 }}
 
   template:
     metadata:
       labels:
-        app: shopnest-frontend
-        app.kubernetes.io/name: shopnest-frontend
-        app.kubernetes.io/part-of: shopnest
-        app.kubernetes.io/component: frontend
+        {{- include "shopnest.selectorLabels" (dict "component" "frontend") | nindent 8 }}
+        {{- include "shopnest.labels" (dict "component" "frontend") | nindent 8 }}
       annotations:
         checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
 
@@ -57,7 +53,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
                   matchLabels:
-                    app: shopnest-frontend
+                    {{- include "shopnest.selectorLabels" (dict "component" "frontend") | nindent 20 }}
 
       containers:
         - name: frontend

@@ -3,13 +3,11 @@ kind: Service
 metadata:
   name: shopnest-frontend
   labels:
-    app.kubernetes.io/name: shopnest-frontend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: frontend
+    {{- include "shopnest.labels" (dict "component" "frontend") | nindent 4 }}
 
 spec:
   selector:
-    app: shopnest-frontend
+    {{- include "shopnest.selectorLabels" (dict "component" "frontend") | nindent 4 }}
 
   ports:
     - port: {{ .Values.frontend.port }}

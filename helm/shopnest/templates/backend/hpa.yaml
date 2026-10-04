@@ -4,9 +4,7 @@ kind: HorizontalPodAutoscaler
 metadata:
   name: shopnest-backend
   labels:
-    app.kubernetes.io/name: shopnest-backend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: backend
+    {{- include "shopnest.labels" (dict "component" "backend") | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
