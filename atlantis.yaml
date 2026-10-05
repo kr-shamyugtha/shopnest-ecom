@@ -1,0 +1,112 @@
+version: 3
+
+# Only the dev units are registered. Staging/prod have never been applied
+# and shared holds the ACR and the CI identity. Widen this deliberately,
+# once it's settled which Azure credential the Atlantis server runs with
+# and what that credential should be allowed to touch.
+#
+# Apply requirements are deliberately not set here. Atlantis reads this
+# file from the PR's own branch, so a rule defined here could be removed by
+# the very PR it's meant to gate. They're set in the server-side repos.yaml
+# instead, which a PR can't override.
+projects:
+  - name: dev-resource-group
+    dir: terraform/azure/live/dev/germanywestcentral/resource-group
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/resource-group/**/*.tf"
+
+  - name: dev-networking
+    dir: terraform/azure/live/dev/germanywestcentral/networking
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/networking/**/*.tf"
+
+  - name: dev-aks
+    dir: terraform/azure/live/dev/germanywestcentral/aks
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/aks/**/*.tf"
+        - "../../../../modules/workload-identity/**/*.tf"
+
+  - name: dev-keyvault
+    dir: terraform/azure/live/dev/germanywestcentral/keyvault
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/keyvault/**/*.tf"
+
+  - name: dev-argocd
+    dir: terraform/azure/live/dev/germanywestcentral/argocd
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/argocd/**/*.tf"
+        # Terraform reads these files directly (file()), so a values-only
+        # change should trigger a plan the same way a .tf change would.
+        # 6 levels up from this project's dir, not 5 — verified with
+        # os.path.normpath rather than counted by eye, after getting this
+        # wrong on the first attempt.
+        - "../../../../../../argocd/install-values.yaml"
+        - "../../../../../../argocd/values.yaml"
+        - "../../../../../../argocd/values-monitoring.yaml"
+
+  - name: dev-cert-manager
+    dir: terraform/azure/live/dev/germanywestcentral/cert-manager
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/cert-manager/**/*.tf"
+
+  # Split from dev-cert-manager: the ClusterIssuer CRD this unit's resources
+  # need only exists once cert-manager's own apply (not just its plan) has
+  # actually run — see modules/cert-manager-issuers/main.tf. Always plan and
+  # apply this one after dev-cert-manager, never together.
+  - name: dev-cert-manager-issuers
+    dir: terraform/azure/live/dev/germanywestcentral/cert-manager-issuers
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/cert-manager-issuers/**/*.tf"
+
+  - name: dev-ingress-nginx
+    dir: terraform/azure/live/dev/germanywestcentral/ingress-nginx
+    workflow: terragrunt
+    autoplan:
+      when_modified:
+        - "*.hcl"
+        - "../../../../modules/ingress-nginx/**/*.tf"
+
+# Native Atlantis assumes plain `terraform`, but this repo is Terragrunt —
+# every project above uses this instead. Both `terragrunt` and `terraform`
+# must be on the Atlantis server's PATH; terragrunt shells out to terraform.
+#
+# `atlantis plan -p <project> -- -destroy` produces a destroy plan; apply it
+# with the usual `atlantis apply -p <project>`. Atlantis hands anything after
+# `--` to this step as COMMENT_ARGS, every character backslash-escaped
+# (`-destroy` arrives as \-\d\e\s\t\r\o\y). Only that exact flag is accepted;
+# anything else fails the plan, so a PR comment can't inject other flags.
+workflows:
+  terragrunt:
+    plan:
+      steps:
+        - run: |
+            case "$COMMENT_ARGS" in
+              "")                 extra="" ;;
+              '\-\d\e\s\t\r\o\y') extra="-destroy" ;;
+              *) printf '%s\n' "Only '-- -destroy' is supported after 'atlantis plan' (got: $COMMENT_ARGS)" >&2; exit 1 ;;
+            esac
+            terragrunt plan -no-color $extra -out "$PLANFILE"
+    apply:
+      steps:
+        - run: terragrunt apply -no-color $PLANFILE

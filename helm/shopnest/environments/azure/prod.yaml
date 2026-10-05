@@ -15,12 +15,15 @@ secrets:
 
 ingress:
   # Fill in once ingress-nginx is actually applied to prod and its
-  # LoadBalancer external IP is known. Replace with a real domain + a real
-  # (non-self-signed) cert-manager issuer before this is ever actually
-  # serving real traffic — the self-signed setup mirrors dev/staging only
-  # because no domain exists yet. Deploying with host left empty will fail
-  # loudly via the `required` guard in ingress.yaml rather than silently
-  # rendering a broken Ingress.
+  # LoadBalancer external IP is known, and flip tls.enabled to true in the
+  # same change. Until then this renders and serves plain HTTP on the
+  # LoadBalancer IP, same as dev. Turning TLS on with host still empty fails
+  # the render loudly via the `required` guard in ingress.yaml rather than
+  # producing a broken Ingress.
+  #
+  # Go-live blocker: prod must not take real traffic until host is a real
+  # domain, tls.enabled is true, and clusterIssuer points at a real
+  # (non-self-signed) cert-manager issuer.
   host: ""
   tls:
-    enabled: true
+    enabled: false

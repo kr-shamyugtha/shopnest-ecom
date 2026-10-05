@@ -78,10 +78,19 @@ stages:
           # whitespace-only failure doesn't wait on the policy scan.
           # -recursive covers the modules and the live tree.
           # ------------------------------------------------------
-          - task: TerraformInstaller@1
+          # Installed via script rather than the TerraformInstaller task so
+          # this pipeline has no dependency on a Marketplace extension being
+          # present in the Azure DevOps org — just curl and unzip, which the
+          # ubuntu-latest hosted image already has.
+          - script: |
+              set -euo pipefail
+              echo "Installing Terraform $(terraformVersion)..."
+              curl -sSLo terraform.zip \
+                "https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip"
+              unzip -o terraform.zip -d /usr/local/bin
+              rm terraform.zip
+              terraform version
             displayName: "Install Terraform $(terraformVersion)"
-            inputs:
-              terraformVersion: "$(terraformVersion)"
 
           - script: |
               set -euo pipefail

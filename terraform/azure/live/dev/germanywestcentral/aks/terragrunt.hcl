@@ -29,10 +29,14 @@ dependency "networking" {
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
-dependency "acr" {
-  config_path = "../../../shared/germanywestcentral/acr"
+dependency "kubelet_identity" {
+  config_path = "../../../shared/germanywestcentral/kubelet-identity"
   mock_outputs = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/acr"
+    id                            = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-kubelet-identity"
+    client_id                     = "00000000-0000-0000-0000-000000000000"
+    principal_id                  = "00000000-0000-0000-0000-000000000000"
+    cluster_identity_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-cluster-identity"
+    cluster_identity_principal_id = "00000000-0000-0000-0000-000000000000"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -46,26 +50,30 @@ dependency "ci_identity" {
 }
 
 inputs = {
-  project_name         = local.project_name
+  project_name        = local.project_name
   environment         = local.environment
-  location             = dependency.resource_group.outputs.location
-  resource_group_name  = dependency.resource_group.outputs.name
-  subnet_id            = dependency.networking.outputs.aks_subnet_id
-  acr_id = dependency.acr.outputs.id
+  location            = dependency.resource_group.outputs.location
+  resource_group_name = dependency.resource_group.outputs.name
+  subnet_id           = dependency.networking.outputs.aks_subnet_id
+
+  kubelet_identity_id        = dependency.kubelet_identity.outputs.id
+  kubelet_identity_client_id = dependency.kubelet_identity.outputs.client_id
+  kubelet_identity_object_id = dependency.kubelet_identity.outputs.principal_id
+  cluster_identity_id        = dependency.kubelet_identity.outputs.cluster_identity_id
   admin_group_object_ids = [
-  "190544d6-0159-4194-aefe-10600507b1e4"
-]
+    "190544d6-0159-4194-aefe-10600507b1e4"
+  ]
   # sc-shopnest-azure Azure DevOps service connection's OIDC identity, now
   # owned by the ci-identity module (imported from the app Azure DevOps
   # originally auto-provisioned — kavitography-shopnest-ado-34471a29-...).
   # Role assignments need the SERVICE PRINCIPAL object ID specifically, not
   # the Application object ID ("PrincipalTypeNotSupported" otherwise).
-  ci_principal_id = dependency.ci_identity.outputs.service_principal_object_id
-  enable_auto_scaling  = true
-  min_count            = 2
-  max_count            = 2
-  vm_size              = "Standard_D2s_v7"
-  kubernetes_version   = "1.35"
+  ci_principal_id     = dependency.ci_identity.outputs.service_principal_object_id
+  enable_auto_scaling = true
+  min_count           = 2
+  max_count           = 2
+  vm_size             = "Standard_D2s_v7"
+  kubernetes_version  = "1.35"
   tags = {
     ManagedBy   = "terraform"
     Environment = local.environment

@@ -29,22 +29,31 @@ dependency "networking" {
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
-# ACR is shared across all environments and has its own independent lifecycle.
-dependency "acr" {
-  config_path = "../../../shared/germanywestcentral/acr"
+# Shared across all environments and has its own independent lifecycle —
+# see terraform/azure/modules/kubelet-identity for why this exists instead
+# of letting each cluster auto-generate its own kubelet identity.
+dependency "kubelet_identity" {
+  config_path = "../../../shared/germanywestcentral/kubelet-identity"
   mock_outputs = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/mock/acr"
+    id                            = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-kubelet-identity"
+    client_id                     = "00000000-0000-0000-0000-000000000000"
+    principal_id                  = "00000000-0000-0000-0000-000000000000"
+    cluster_identity_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mock-cluster-identity"
+    cluster_identity_principal_id = "00000000-0000-0000-0000-000000000000"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
 inputs = {
-  project_name                = local.project_name
-  environment                 = local.environment
-  location                    = dependency.resource_group.outputs.location
-  resource_group_name         = dependency.resource_group.outputs.name
-  subnet_id                   = dependency.networking.outputs.aks_subnet_id
-  acr_id                      = dependency.acr.outputs.id
+  project_name               = local.project_name
+  environment                = local.environment
+  location                   = dependency.resource_group.outputs.location
+  resource_group_name        = dependency.resource_group.outputs.name
+  subnet_id                  = dependency.networking.outputs.aks_subnet_id
+  kubelet_identity_id        = dependency.kubelet_identity.outputs.id
+  kubelet_identity_client_id = dependency.kubelet_identity.outputs.client_id
+  kubelet_identity_object_id = dependency.kubelet_identity.outputs.principal_id
+  cluster_identity_id        = dependency.kubelet_identity.outputs.cluster_identity_id
   admin_group_object_ids = [
     "91f40ba8-7d31-44c8-a2f2-371aa2b61e31" # shopnest-aks-admins-prod
   ]

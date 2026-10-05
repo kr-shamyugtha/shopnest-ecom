@@ -70,6 +70,19 @@ applications:
                   url: http://loki-gateway.monitoring.svc.cluster.local
                   isDefault: false
 
+              # nip.io resolves any subdomain of an IP back to that IP, so
+              # this reaches ingress-nginx's existing LoadBalancer with no
+              # real DNS record needed. Only safe because this is a
+              # throwaway dev cluster — login is Grafana's own auth, with
+              # nothing in front of it. Tied to the LoadBalancer's current
+              # IP: if it ever changes (e.g. a full AKS rebuild), this
+              # hostname needs updating to match.
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hosts:
+                  - grafana.20.79.85.142.nip.io
+
               # ------------------------------------------------------
               # ShopNest dashboard, provisioned as a file through Grafana's
               # dashboardProviders rather than through the chart's
@@ -223,7 +236,7 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 5,
+                              "w": 4,
                               "x": 0,
                               "y": 1
                             },
@@ -246,7 +259,7 @@ applications:
                           },
                           {
                             "id": 3,
-                            "title": "Pending",
+                            "title": "Placed",
                             "type": "stat",
                             "datasource": {
                               "type": "prometheus",
@@ -254,14 +267,14 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 5,
-                              "x": 5,
+                              "w": 4,
+                              "x": 4,
                               "y": 1
                             },
                             "targets": [
                               {
-                                "expr": "max(shopnest_orders_by_status{status=\"Pending\"})",
-                                "legendFormat": "pending",
+                                "expr": "max(shopnest_orders_by_status{status=\"Placed\"})",
+                                "legendFormat": "placed",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
@@ -277,7 +290,8 @@ applications:
                                 }
                               },
                               "overrides": []
-                            }
+                            },
+                            "description": "Renamed from Pending in the Order model - 'Pending' read as though the shop had not accepted the order yet."
                           },
                           {
                             "id": 4,
@@ -289,8 +303,8 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 5,
-                              "x": 10,
+                              "w": 4,
+                              "x": 8,
                               "y": 1
                             },
                             "targets": [
@@ -324,8 +338,8 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 5,
-                              "x": 15,
+                              "w": 4,
+                              "x": 12,
                               "y": 1
                             },
                             "targets": [
@@ -348,6 +362,42 @@ applications:
                               },
                               "overrides": []
                             }
+                          },
+                          {
+                            "id": 39,
+                            "title": "Cancelled",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 16,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_orders_by_status{status=\"Cancelled\"})",
+                                "legendFormat": "cancelled",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "red"
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "description": "Terminal state, only reachable while the order is still Placed. Never emitted at all before metrics.js was fixed to read the status list from the schema."
                           },
                           {
                             "id": 6,
@@ -386,6 +436,46 @@ applications:
                             "description": "Counter, in-process: resets to 0 when the pod restarts. Use 'Total Orders (Atlas)' for the authoritative figure."
                           },
                           {
+                            "id": 40,
+                            "title": "Status totals vs order total (should match)",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 12,
+                              "x": 0,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(max by (status) (shopnest_orders_by_status))",
+                                "legendFormat": "sum of statuses",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "max(shopnest_orders_total)",
+                                "legendFormat": "orders_total (Atlas)",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "These two lines diverging means the status list metrics.js exports has drifted from the Order schema enum - which is exactly what happened when Pending became Placed and Cancelled was added: five orders vanished from the breakdown while orders_total kept counting them."
+                          },
+                          {
                             "id": 7,
                             "title": "Orders by Status Over Time",
                             "type": "timeseries",
@@ -394,9 +484,9 @@ applications:
                               "uid": "${DS_PROMETHEUS}"
                             },
                             "gridPos": {
-                              "h": 7,
+                              "h": 6,
                               "w": 12,
-                              "x": 0,
+                              "x": 12,
                               "y": 6
                             },
                             "targets": [
@@ -424,10 +514,10 @@ applications:
                               "uid": "${DS_PROMETHEUS}"
                             },
                             "gridPos": {
-                              "h": 7,
-                              "w": 12,
-                              "x": 12,
-                              "y": 6
+                              "h": 6,
+                              "w": 24,
+                              "x": 0,
+                              "y": 12
                             },
                             "targets": [
                               {
@@ -464,7 +554,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 13
+                              "y": 18
                             }
                           },
                           {
@@ -479,7 +569,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 0,
-                              "y": 14
+                              "y": 19
                             },
                             "targets": [
                               {
@@ -510,7 +600,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 6,
-                              "y": 14
+                              "y": 19
                             },
                             "targets": [
                               {
@@ -545,7 +635,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 12,
-                              "y": 14
+                              "y": 19
                             },
                             "targets": [
                               {
@@ -580,7 +670,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 18,
-                              "y": 14
+                              "y": 19
                             },
                             "targets": [
                               {
@@ -632,7 +722,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 19
+                              "y": 24
                             },
                             "targets": [
                               {
@@ -671,7 +761,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 19
+                              "y": 24
                             },
                             "targets": [
                               {
@@ -699,7 +789,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 26
+                              "y": 31
                             }
                           },
                           {
@@ -714,7 +804,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 0,
-                              "y": 27
+                              "y": 32
                             },
                             "targets": [
                               {
@@ -758,7 +848,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 6,
-                              "y": 27
+                              "y": 32
                             },
                             "targets": [
                               {
@@ -808,7 +898,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 12,
-                              "y": 27
+                              "y": 32
                             },
                             "targets": [
                               {
@@ -840,7 +930,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 18,
-                              "y": 27
+                              "y": 32
                             },
                             "targets": [
                               {
@@ -872,7 +962,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 32
+                              "y": 37
                             },
                             "targets": [
                               {
@@ -904,7 +994,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 32
+                              "y": 37
                             },
                             "targets": [
                               {
@@ -954,7 +1044,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 39
+                              "y": 44
                             },
                             "targets": [
                               {
@@ -984,7 +1074,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 39
+                              "y": 44
                             },
                             "targets": [
                               {
@@ -1011,7 +1101,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 46
+                              "y": 51
                             }
                           },
                           {
@@ -1026,7 +1116,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 47
+                              "y": 52
                             },
                             "targets": [
                               {
@@ -1065,7 +1155,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 47
+                              "y": 52
                             },
                             "targets": [
                               {
@@ -1095,7 +1185,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 54
+                              "y": 59
                             },
                             "targets": [
                               {
@@ -1127,7 +1217,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 54
+                              "y": 59
                             },
                             "targets": [
                               {
@@ -1159,7 +1249,7 @@ applications:
                               "h": 7,
                               "w": 24,
                               "x": 0,
-                              "y": 61
+                              "y": 66
                             },
                             "targets": [
                               {
@@ -1188,7 +1278,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 68
+                              "y": 73
                             }
                           },
                           {
@@ -1203,7 +1293,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 69
+                              "y": 74
                             },
                             "targets": [
                               {
@@ -1237,7 +1327,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 69
+                              "y": 74
                             },
                             "targets": [
                               {
@@ -1271,7 +1361,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 76
+                              "y": 81
                             },
                             "targets": [
                               {
@@ -1305,7 +1395,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 76
+                              "y": 81
                             },
                             "targets": [
                               {
@@ -1343,7 +1433,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 83
+                              "y": 88
                             }
                           },
                           {
@@ -1358,7 +1448,7 @@ applications:
                               "h": 7,
                               "w": 24,
                               "x": 0,
-                              "y": 84
+                              "y": 89
                             },
                             "targets": [
                               {
@@ -1388,7 +1478,7 @@ applications:
                               "h": 11,
                               "w": 24,
                               "x": 0,
-                              "y": 91
+                              "y": 96
                             },
                             "targets": [
                               {
@@ -1415,6 +1505,14 @@ applications:
                       }
             prometheus:
               enabled: true
+              # Same nip.io approach as Grafana's ingress above.
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hosts:
+                  - prometheus.20.79.85.142.nip.io
+                paths:
+                  - /
               prometheusSpec:
                 # THE MOST IMPORTANT SETTING IN THIS FILE.
                 # By default this chart's Prometheus only watches
@@ -1475,12 +1573,28 @@ applications:
                       resources:
                         requests:
                           storage: 2Gi
-              # NOTE: put the real Slack webhook URL in a Secret instead of
-              # committing it in plaintext here.
+                # Mounts the Secret below at
+                # /etc/alertmanager/secrets/shopnest-teams-webhook/, so the
+                # webhook URL lives in the cluster, not in this file or Git.
+                secrets:
+                  - shopnest-teams-webhook
+              # The Secret is created OUT OF BAND, the same way as
+              # grafana-admin-credentials above:
+              #
+              #   kubectl create secret generic shopnest-teams-webhook \
+              #     -n monitoring \
+              #     --from-literal=webhook-url='<Teams workflow webhook URL>'
+              #
+              # The URL comes from a Teams channel: ... -> Workflows ->
+              # "Post to a channel when a webhook request is received".
+              # Microsoft retired the old Office 365 Connector webhooks, so
+              # this Workflows-based URL is the current way in; msteamsv2
+              # is the receiver type built for it (the plain msteams_configs
+              # receiver targets the retired connector and won't work here).
               config:
                 global: {}
                 route:
-                  receiver: "shopnest-slack"
+                  receiver: "shopnest-teams"
                   group_by: ["alertname", "severity"]
                   group_wait: 30s
                   group_interval: 5m
@@ -1488,19 +1602,46 @@ applications:
                   routes:
                     - matchers:
                         - severity = critical
-                      receiver: "shopnest-slack"
+                      receiver: "shopnest-teams"
                       repeat_interval: 1h
                 receivers:
-                  - name: "shopnest-slack"
-                    slack_configs:
-                      - api_url: "https://hooks.slack.com/services/REPLACE/WITH/YOUR-WEBHOOK"
-                        channel: "#shopnest-alerts"
+                  - name: "shopnest-teams"
+                    msteamsv2_configs:
+                      - webhook_url_file: /etc/alertmanager/secrets/shopnest-teams-webhook/webhook-url
                         send_resolved: true
                         title: '{{ .CommonAnnotations.summary }}'
                         text: '{{ .CommonAnnotations.description }}'
 
             nodeExporter:
               enabled: true
+
+            # ------------------------------------------------------------
+            # AKS control plane: disabled because it CANNOT be scraped.
+            #
+            # etcd, the scheduler, the controller-manager and kube-proxy run
+            # on Azure-managed control plane nodes that worker nodes have no
+            # network path to. Leaving them enabled ships four
+            # ServiceMonitors that discover nothing, four PrometheusRule
+            # groups whose alerts can never fire, and their Grafana
+            # dashboards - which is why the etcd dashboard renders every
+            # panel as "No data". That is not a broken dashboard; there is
+            # genuinely nothing on the other end of it.
+            #
+            # coreDns is deliberately NOT disabled: it runs as pods on the
+            # worker nodes and IS scraped.
+            #
+            # Cluster and node visibility is unaffected - it comes from
+            # kubelet/cAdvisor, the apiserver, kube-state-metrics and
+            # node-exporter, all of which remain enabled.
+            # ------------------------------------------------------------
+            kubeEtcd:
+              enabled: false
+            kubeScheduler:
+              enabled: false
+            kubeControllerManager:
+              enabled: false
+            kubeProxy:
+              enabled: false
 
             kubeStateMetrics:
               enabled: true
@@ -1528,6 +1669,14 @@ applications:
                   memory: 128Mi
 
             prometheusOperator:
+              # Webhook TLS from cert-manager instead of the chart's
+              # admission-create/patch Helm-hook Jobs. Under Argo CD those
+              # Jobs race their own delete policy ("Job ... is missing, it
+              # might have been deleted"), the PreSync phase fails, and the
+              # sync aborts before the Prometheus CR is ever applied.
+              admissionWebhooks:
+                certManager:
+                  enabled: true
               resources:
                 requests:
                   cpu: 25m
@@ -1783,6 +1932,21 @@ applications:
       server: https://kubernetes.default.svc
       namespace: monitoring
     syncPolicy:
+      # Same as the shopnest app: Argo CD reconciles whatever Git says, with
+      # no manual sync after a rebuild. The first-sync failures seen before
+      # (client-side apply on the large Prometheus CRDs, the admission-webhook
+      # hook Jobs) are fixed by ServerSideApply and certManager above; retry
+      # covers the ordering races left on a fresh cluster, e.g. CRDs not yet
+      # established when the Prometheus CR is applied.
+      automated:
+        selfHeal: true
+        prune: true
+      retry:
+        limit: 5
+        backoff:
+          duration: 30s
+          factor: 2
+          maxDuration: 5m
       syncOptions:
         - CreateNamespace=true
         - ServerSideApply=true

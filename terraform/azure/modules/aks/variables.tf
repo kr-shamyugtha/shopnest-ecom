@@ -18,7 +18,21 @@ variable "subnet_id" {
   type = string
 }
 
-variable "acr_id" {
+variable "kubelet_identity_id" {
+  description = "Resource ID of the shared kubelet identity (terraform/azure/live/shared/germanywestcentral/kubelet-identity), already granted AcrPull once."
+  type        = string
+}
+
+variable "cluster_identity_id" {
+  description = "Resource ID of the shared control-plane identity (terraform/azure/live/shared/germanywestcentral/kubelet-identity), already granted Managed Identity Operator on the kubelet identity once."
+  type        = string
+}
+
+variable "kubelet_identity_client_id" {
+  type = string
+}
+
+variable "kubelet_identity_object_id" {
   type = string
 }
 

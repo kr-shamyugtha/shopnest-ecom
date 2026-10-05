@@ -3,9 +3,7 @@ kind: ConfigMap
 metadata:
   name: shopnest-frontend-config
   labels:
-    app.kubernetes.io/name: shopnest-frontend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: frontend
+    {{- include "shopnest.labels" (dict "component" "frontend") | nindent 4 }}
 
 data:
   config.js: |

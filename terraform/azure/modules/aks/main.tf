@@ -35,8 +35,28 @@ resource "azurerm_kubernetes_cluster" "this" {
     mode = "Manual"
   }
 
+  # UserAssigned (not SystemAssigned) is required by the provider whenever a
+  # custom kubelet_identity is set below. Fixed to the identity created once
+  # in the shared kubelet-identity unit, not created here — Azure requires
+  # this identity to hold "Managed Identity Operator" on the kubelet identity
+  # before it will let the control plane assign it to the cluster's nodes,
+  # and that grant is scoped inside shopnest-shared-rg's CanNotDelete lock.
+  # See kubelet-identity/main.tf for why that role assignment (and so this
+  # identity) has to be shared rather than recreated with every cluster.
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [var.cluster_identity_id]
+  }
+
+  # Fixes the kubelet identity to the one created once in the shared unit
+  # (terraform/azure/modules/kubelet-identity), instead of the auto-generated
+  # one AKS creates when this block is omitted. That auto-generated identity
+  # is destroyed and recreated with every cluster, which is exactly the
+  # problem this avoids — see kubelet-identity/main.tf for why.
+  kubelet_identity {
+    client_id                 = var.kubelet_identity_client_id
+    object_id                 = var.kubelet_identity_object_id
+    user_assigned_identity_id = var.kubelet_identity_id
   }
 
   network_profile {
@@ -81,13 +101,6 @@ resource "azurerm_role_assignment" "ci_aks_rbac_writer" {
   scope                = azurerm_kubernetes_cluster.this.id
   role_definition_name = "Azure Kubernetes Service RBAC Writer"
   principal_id         = var.ci_principal_id
-}
-
-resource "azurerm_role_assignment" "aks_acr_pull" {
-  scope                            = var.acr_id
-  role_definition_name             = "AcrPull"
-  principal_id                     = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
-  skip_service_principal_aad_check = true
 }
 
 # ==========================================================

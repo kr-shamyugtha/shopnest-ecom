@@ -4,12 +4,10 @@ kind: PodDisruptionBudget
 metadata:
   name: shopnest-frontend
   labels:
-    app.kubernetes.io/name: shopnest-frontend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: frontend
+    {{- include "shopnest.labels" (dict "component" "frontend") | nindent 4 }}
 spec:
   minAvailable: {{ .Values.frontend.podDisruptionBudget.minAvailable }}
   selector:
     matchLabels:
-      app: shopnest-frontend
+      {{- include "shopnest.selectorLabels" (dict "component" "frontend") | nindent 6 }}
 {{- end }}

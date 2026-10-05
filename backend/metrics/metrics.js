@@ -101,7 +101,21 @@ const ordersByStatus = new client.Gauge({
     try {
       const Order = require('../models/Order');
 
-      const statuses = ['Pending', 'Shipped', 'Delivered'];
+      /*
+       * Read the status list off the schema rather than repeating it here.
+       *
+       * This was previously hardcoded as ['Pending', 'Shipped',
+       * 'Delivered'], and when the model renamed Pending -> Placed and
+       * added Cancelled, this copy was missed. The result was silent and
+       * wrong rather than broken: the Pending series reported 0 forever,
+       * Placed and Cancelled were never emitted at all, and the statuses
+       * stopped adding up to shopnest_orders_total - five orders simply
+       * unaccounted for on the dashboard.
+       *
+       * Deriving from enumValues means a future status is exported the
+       * moment it is added to the model, with no second place to update.
+       */
+      const statuses = Order.schema.path('status').enumValues;
 
       const counts = await Order.aggregate([
         {

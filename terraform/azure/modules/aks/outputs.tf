@@ -6,8 +6,14 @@ output "cluster_id" {
   value = azurerm_kubernetes_cluster.this.id
 }
 
+output "oidc_issuer_url" {
+  description = "OIDC issuer URL, for federating a new workload identity to a ServiceAccount on this cluster."
+  value       = azurerm_kubernetes_cluster.this.oidc_issuer_url
+}
+
 output "kubelet_identity_object_id" {
-  value = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+  description = "Now just echoes var.kubelet_identity_object_id — the identity is fixed by the kubelet_identity block, not auto-generated."
+  value       = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
 }
 
 output "keyvault_secrets_provider_client_id" {

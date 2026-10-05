@@ -3,9 +3,7 @@ kind: ConfigMap
 metadata:
   name: shopnest-backend-config
   labels:
-    app.kubernetes.io/name: shopnest-backend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: backend
+    {{- include "shopnest.labels" (dict "component" "backend") | nindent 4 }}
 
 data:
   PORT: {{ .Values.backend.config.port | quote }}

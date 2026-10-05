@@ -24,7 +24,8 @@ secrets:
 workloadIdentity:
   enabled: true
   serviceAccountName: shopnest-backend
-  # clientId intentionally not set here — it's a generated UUID that changes
-  # whenever Terraform recreates the backend identity, so it's supplied at
-  # deploy time via `--set` (fetched live via `az identity show`, see
-  # ci/azure-pipelines.yml) rather than committed to any values file.
+  # clientId intentionally not set here — it's a generated UUID that's
+  # different per environment and changes whenever Terraform recreates the
+  # backend identity. It lives in environments/azure/<env>.yaml instead;
+  # for dev, the DeployToAKS stage of ci/azure-pipelines.yml fetches it live
+  # (`az identity show`) and commits it there alongside the image tag.

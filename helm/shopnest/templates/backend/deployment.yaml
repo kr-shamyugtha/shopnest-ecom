@@ -3,10 +3,8 @@ kind: Deployment
 metadata:
   name: shopnest-backend
   labels:
-    app: shopnest-backend
-    app.kubernetes.io/name: shopnest-backend
-    app.kubernetes.io/part-of: shopnest
-    app.kubernetes.io/component: backend
+    {{- include "shopnest.selectorLabels" (dict "component" "backend") | nindent 4 }}
+    {{- include "shopnest.labels" (dict "component" "backend") | nindent 4 }}
 
 spec:
   {{- if not .Values.backend.autoscaling.enabled }}
@@ -26,15 +24,13 @@ spec:
 
   selector:
     matchLabels:
-      app: shopnest-backend
+      {{- include "shopnest.selectorLabels" (dict "component" "backend") | nindent 6 }}
 
   template:
     metadata:
       labels:
-        app: shopnest-backend
-        app.kubernetes.io/name: shopnest-backend
-        app.kubernetes.io/part-of: shopnest
-        app.kubernetes.io/component: backend
+        {{- include "shopnest.selectorLabels" (dict "component" "backend") | nindent 8 }}
+        {{- include "shopnest.labels" (dict "component" "backend") | nindent 8 }}
         azure.workload.identity/use: "true"
       annotations:
         checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
@@ -68,7 +64,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
                   matchLabels:
-                    app: shopnest-backend
+                    {{- include "shopnest.selectorLabels" (dict "component" "backend") | nindent 20 }}
 
       containers:
         - name: backend
