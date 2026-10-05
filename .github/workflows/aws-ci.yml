@@ -64,13 +64,25 @@ jobs:
         working-directory: backend
         run: |
           npm ci
-          npm test -- --ci
+          npm test -- --ci --coverage
 
       - name: Run Frontend Tests
         working-directory: frontend
         run: |
           npm ci
-          npm test -- --watchAll=false
+          npm test -- --watchAll=false --ci --coverage
+
+      # Sonar runs in a later job on a fresh runner, so the lcov files travel as
+      # an artifact. Paths keep backend/ and frontend/ so they match
+      # sonar.javascript.lcov.reportPaths.
+      - name: Upload Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            backend/coverage/lcov.info
+            frontend/coverage/lcov.info
+          retention-days: 1
 
   # ============================================================
   # Stage 2: Build
@@ -113,6 +125,13 @@ jobs:
           # makes it treat every line as new.
           fetch-depth: 0
 
+      - name: Download Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      # sonar.projectKey and the rest of the analysis settings come from
+      # sonar-project.properties at the repo root.
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v4
         env:
