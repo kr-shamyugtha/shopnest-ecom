@@ -1,0 +1,39 @@
+# AWS counterpart to values-azure.yaml. Everything that differs between the
+# two clouds lives in these two files; the templates and values.yaml are
+# shared.
+
+cloud:
+  provider: aws
+
+backend:
+  image:
+    # <account-id>.dkr.ecr.<region>.amazonaws.com/<namespace>/<repo> — ECR
+    # has no registry object to name the way ACR does, so the account ID is
+    # part of the host. Read it from the shared/ecr unit's registry_url
+    # output, or from `aws sts get-caller-identity`.
+    repository: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/shopnest/shopnest-backend
+
+  config:
+    port: "5000"
+    nodeEnv: "production"
+    frontendUrl: ""
+
+frontend:
+  image:
+    repository: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/shopnest/shopnest-frontend
+
+secrets:
+  enabled: true
+  providerClassName: shopnest-backend
+
+  aws:
+    # Set per environment, since staging and prod live in other regions.
+    region: "eu-central-1"
+
+workloadIdentity:
+  enabled: true
+  serviceAccountName: shopnest-backend
+  # roleArn intentionally not set here — it embeds the AWS account ID and
+  # changes whenever Terraform recreates the backend role, so it is supplied
+  # per environment (committed in environments/aws/<env>.yaml, which is what
+  # Argo CD reads) rather than hardcoded in the shared cloud values file.

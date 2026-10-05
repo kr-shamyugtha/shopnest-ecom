@@ -1,0 +1,82 @@
+# AWS counterpart to argocd/values.yaml. Same Application/AppProject shape;
+# what differs is the repo it tracks (GitHub, not Azure Repos) and the
+# value files it layers (values-aws.yaml + environments/aws/<env>.yaml).
+#
+# argocd/install-values.yaml is cloud-neutral and used unchanged for the
+# Argo CD install itself on both clouds.
+
+applications:
+  shopnest:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    project: shopnest
+    sources:
+      # The GitHub repo the AWS pipeline pushes its GitOps commits to. If
+      # the repo is private, Argo CD needs repo credentials configured
+      # separately from this values file — same as the Azure Repos setup.
+      - repoURL: https://github.com/kr-shamyugtha/shopnest-ecom.git
+        path: helm/shopnest
+        targetRevision: HEAD
+        helm:
+          releaseName: shopnest
+          valueFiles:
+            - values-aws.yaml
+            - environments/aws/dev.yaml
+    destination:
+      server: https://kubernetes.default.svc
+      # Must match where the app actually runs — every other piece (CI, the
+      # IRSA role's trust condition, the NetworkPolicies) already assumes
+      # the "shopnest" namespace.
+      namespace: shopnest
+    syncPolicy:
+      automated:
+        selfHeal: true
+        prune: true
+      syncOptions:
+        - CreateNamespace=true
+
+projects:
+  shopnest:
+    namespace: argocd
+    additionalLabels: {}
+    additionalAnnotations: {}
+    permitOnlyProjectScopedClusters: false
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    description: ShopNest application delivery
+    sourceRepos:
+      - https://github.com/kr-shamyugtha/shopnest-ecom.git
+    destinations:
+      - namespace: shopnest
+        server: https://kubernetes.default.svc
+    # Cluster-scoped resources denied by default except Namespace itself —
+    # needed because syncPolicy.syncOptions has CreateNamespace=true, and
+    # that goes through this same project permission check. Namespace-scoped
+    # kinds explicitly limited to what the app actually needs — notably
+    # excludes Role/RoleBinding, so a compromised or mis-templated chart
+    # change can never grant itself permissions via a synced manifest.
+    clusterResourceWhitelist:
+      - group: ""
+        kind: Namespace
+    namespaceResourceWhitelist:
+      - group: "apps"
+        kind: Deployment
+      - group: ""
+        kind: Service
+      - group: ""
+        kind: ServiceAccount
+      - group: ""
+        kind: ConfigMap
+      - group: "autoscaling"
+        kind: HorizontalPodAutoscaler
+      - group: "policy"
+        kind: PodDisruptionBudget
+      - group: "networking.k8s.io"
+        kind: NetworkPolicy
+      - group: "networking.k8s.io"
+        kind: Ingress
+      - group: "secrets-store.csi.x-k8s.io"
+        kind: SecretProviderClass
