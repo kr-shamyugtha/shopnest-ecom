@@ -140,6 +140,8 @@ variable "addon_versions" {
     kube_proxy = optional(string)
     coredns    = optional(string)
     ebs_csi    = optional(string)
+
+    pod_identity_agent = optional(string)
   })
   default = {}
 }
@@ -169,4 +171,10 @@ variable "admin_principal_arns" {
     condition     = length(var.admin_principal_arns) > 0
     error_message = "At least one administrator principal must be configured."
   }
+}
+
+variable "enable_network_policy" {
+  description = "Turn on the VPC CNI's NetworkPolicy enforcement, so the chart's policies behave as they do on AKS."
+  type        = bool
+  default     = true
 }

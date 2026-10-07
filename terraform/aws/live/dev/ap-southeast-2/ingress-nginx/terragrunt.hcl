@@ -25,6 +25,14 @@ dependency "eks" {
 # which nothing satisfies until the AWS Load Balancer Controller is running.
 # Applied first, the Service sits at <pending> EXTERNAL-IP indefinitely
 # rather than failing, so this ordering is not optional.
+dependency "networking" {
+  config_path = "../networking"
+  mock_outputs = {
+    public_subnet_ids = ["subnet-mock1", "subnet-mock2"]
+  }
+  mock_outputs_allowed_terraform_commands = ["validate"]
+}
+
 dependency "aws_load_balancer_controller" {
   config_path                             = "../aws-load-balancer-controller"
   mock_outputs                            = {}
@@ -37,4 +45,11 @@ inputs = {
   cluster_ca_certificate = dependency.eks.outputs.cluster_ca_certificate
   cluster_name           = dependency.eks.outputs.cluster_name
   region                 = local.region
+
+  public_subnet_ids = dependency.networking.outputs.public_subnet_ids
+
+  tags = {
+    ManagedBy = "terraform"
+    Project   = "shopnest"
+  }
 }

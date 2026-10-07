@@ -15,26 +15,17 @@
 # header.
 # ============================================================================
 
+# Pod Identity rather than IRSA: the Free plan's SCP denies creating the IAM
+# OIDC provider IRSA depends on. Which pod may use this role is bound by the
+# association below, not by the trust policy.
 data "aws_iam_policy_document" "assume" {
   statement {
     effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    actions = ["sts:AssumeRole", "sts:TagSession"]
 
     principals {
-      type        = "Federated"
-      identifiers = [var.oidc_provider_arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${var.oidc_issuer_host}:sub"
-      values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${var.oidc_issuer_host}:aud"
-      values   = ["sts.amazonaws.com"]
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
     }
   }
 }
@@ -60,6 +51,15 @@ resource "aws_iam_policy" "this" {
 resource "aws_iam_role_policy_attachment" "this" {
   role       = aws_iam_role.this.name
   policy_arn = aws_iam_policy.this.arn
+}
+
+resource "aws_eks_pod_identity_association" "this" {
+  cluster_name    = var.cluster_name
+  namespace       = "kube-system"
+  service_account = "aws-load-balancer-controller"
+  role_arn        = aws_iam_role.this.arn
+
+  tags = var.tags
 }
 
 resource "helm_release" "this" {
@@ -95,10 +95,6 @@ resource "helm_release" "this" {
     value = "aws-load-balancer-controller"
   }
 
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.this.arn
-  }
 
   # Two replicas is the chart default and it does not fit on a two-node
   # cluster already running the app, Argo CD and the monitoring stack —
@@ -108,5 +104,8 @@ resource "helm_release" "this" {
     value = var.replica_count
   }
 
-  depends_on = [aws_iam_role_policy_attachment.this]
+  depends_on = [
+    aws_iam_role_policy_attachment.this,
+    aws_eks_pod_identity_association.this,
+  ]
 }

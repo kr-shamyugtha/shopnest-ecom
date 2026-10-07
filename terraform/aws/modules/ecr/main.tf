@@ -125,7 +125,7 @@ data "aws_iam_policy_document" "pull" {
 # scope it to — the push actions themselves stay scoped to these
 # repositories only.
 resource "aws_iam_policy" "ci_push" {
-  count = var.ci_role_name != null ? 1 : 0
+  count = var.ci_user_name != null ? 1 : 0
 
   name        = "${var.namespace}-ecr-push"
   description = "Push access to the ShopNest ECR repositories, for the CI pipeline"
@@ -135,7 +135,7 @@ resource "aws_iam_policy" "ci_push" {
 }
 
 data "aws_iam_policy_document" "ci_push" {
-  count = var.ci_role_name != null ? 1 : 0
+  count = var.ci_user_name != null ? 1 : 0
 
   statement {
     sid       = "AuthorizeRegistry"
@@ -164,9 +164,9 @@ data "aws_iam_policy_document" "ci_push" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "ci_push" {
-  count = var.ci_role_name != null ? 1 : 0
+resource "aws_iam_user_policy_attachment" "ci_push" {
+  count = var.ci_user_name != null ? 1 : 0
 
-  role       = var.ci_role_name
+  user       = var.ci_user_name
   policy_arn = aws_iam_policy.ci_push[0].arn
 }

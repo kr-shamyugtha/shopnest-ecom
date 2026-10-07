@@ -16,7 +16,7 @@ dependency "resource_group" {
   config_path = "../resource-group"
   mock_outputs = {
     name   = "mock-rg"
-    region = "eu-central-1"
+    region = "ap-southeast-2"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }

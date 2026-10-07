@@ -1,18 +1,10 @@
-output "role_arn" {
-  description = "ARN the GitHub Actions workflow assumes. Set this as the AWS_ROLE_ARN repository variable."
-  value       = aws_iam_role.ci.arn
+output "user_name" {
+  description = "Create its access key with `aws iam create-access-key --user-name <this>` and store it as the AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY repository secrets."
+  value       = aws_iam_user.ci.name
 }
 
-output "role_name" {
-  value = aws_iam_role.ci.name
-}
-
-# Counterpart to the Azure units' hardcoded ci_principal_id — the identity
-# the eks and ecr modules grant access to.
+# Counterpart to the Azure units' ci_principal_id — the identity the eks
+# and ecr modules grant access to.
 output "principal_arn" {
-  value = aws_iam_role.ci.arn
-}
-
-output "oidc_provider_arn" {
-  value = local.oidc_provider_arn
+  value = aws_iam_user.ci.arn
 }

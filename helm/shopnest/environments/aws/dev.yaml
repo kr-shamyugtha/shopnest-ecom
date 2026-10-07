@@ -1,7 +1,7 @@
 backend:
   image:
     tag: "1.0.6"
-  # Same constraint as the Azure dev cluster: two t3.large nodes (2 vCPU
+  # Same constraint as the Azure dev cluster: two m7i-flex.large nodes (2 vCPU
   # each) already carry Argo CD, the monitoring stack and, unlike AKS, the
   # add-ons AWS does not manage for you (load balancer controller,
   # metrics-server, cluster-autoscaler, the CSI driver pair). 1 replica is
@@ -16,14 +16,14 @@ frontend:
     minReplicas: 1
 secrets:
   aws:
-    region: "eu-central-1"
+    region: "ap-southeast-2"
     secretPrefix: "shopnest/dev"
 # Only changes when Terraform recreates the backend role (rare) — safe to
 # commit directly (it's an identifier, not a secret) rather than relying on
 # a live `--set` at deploy time, which Argo CD's GitOps flow has no
 # equivalent for. The pipeline rewrites this value on every run.
 workloadIdentity:
-  roleArn: "arn:aws:iam::123456789012:role/shopnest-dev-backend"
+  roleArn: "arn:aws:iam::700558813872:role/shopnest-dev-backend"
 ingress:
   # Fill in once ingress-nginx is applied and the NLB's DNS name is known.
   # An NLB gets a hostname, not an IP, so the nip.io trick the Azure dev

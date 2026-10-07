@@ -11,10 +11,12 @@
 # tar artifact, never rebuilt), and a pull request can run every check but
 # cannot push to the registry or commit to the GitOps config.
 #
-# Auth is OIDC only — no long-lived AWS keys in repository secrets. The role
-# is created by terraform/aws/live/shared/eu-central-1/ci-oidc and its trust
-# policy additionally restricts assumption to refs/heads/main, so the
-# PR guards below are belt-and-braces rather than the only control.
+# Auth: the AWS Free plan denies creating the IAM OIDC provider that GitHub
+# OIDC federation needs, so the pipeline signs in as the shopnest-ci IAM user
+# (terraform/aws/live/shared/ap-southeast-2/ci-identity). Its policy only
+# allows pushing the two ECR repositories and reading the backend workload
+# role's ARN; the key lives in the AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+# repository secrets. The PR guards below keep an unmerged PR from using it.
 # ============================================================================
 
 name: AWS CI/CD
@@ -36,7 +38,7 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: eu-central-1
+  AWS_REGION: ap-southeast-2
   ECR_NAMESPACE: shopnest
   BACKEND_REPO: shopnest/shopnest-backend
   FRONTEND_REPO: shopnest/shopnest-frontend
@@ -172,8 +174,8 @@ jobs:
 
           # Built with the bare repository name and retagged against the
           # real registry host only at push time. The registry host embeds
-          # the AWS account ID, which is not known until the OIDC role is
-          # assumed — and this job deliberately has no AWS credentials.
+          # the AWS account ID, which is not known until the pipeline signs in to
+          # AWS — and this job deliberately has no AWS credentials.
           docker build \
             --build-arg BUILD_DATE="$BUILD_DATE" \
             --build-arg VERSION="$VERSION" \
@@ -284,9 +286,6 @@ jobs:
     # code to the shared registry.
     if: github.event_name != 'pull_request'
 
-    permissions:
-      id-token: write
-      contents: read
 
     outputs:
       registry: ${{ steps.login-ecr.outputs.registry }}
@@ -305,10 +304,11 @@ jobs:
           docker load -i docker-images/shopnest-frontend.tar
           docker images | grep shopnest
 
-      - name: Configure AWS Credentials (OIDC)
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -349,7 +349,6 @@ jobs:
     if: github.event_name != 'pull_request'
 
     permissions:
-      id-token: write
       contents: write
 
     steps:
@@ -360,10 +359,11 @@ jobs:
           # below can authenticate without a PAT.
           persist-credentials: true
 
-      - name: Configure AWS Credentials (OIDC)
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install yq

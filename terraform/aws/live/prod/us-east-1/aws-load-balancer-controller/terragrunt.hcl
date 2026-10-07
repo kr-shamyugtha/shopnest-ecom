@@ -28,8 +28,6 @@ dependency "eks" {
     host                   = "https://mock.example.com"
     cluster_ca_certificate = "bW9jaw=="
     cluster_name           = "mock-cluster"
-    oidc_provider_arn      = "arn:aws:iam::000000000000:oidc-provider/mock"
-    oidc_issuer_host       = "oidc.eks.us-east-1.amazonaws.com/id/MOCK"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -41,8 +39,6 @@ inputs = {
   region                 = local.region
 
   vpc_id            = dependency.networking.outputs.vpc_id
-  oidc_provider_arn = dependency.eks.outputs.oidc_provider_arn
-  oidc_issuer_host  = dependency.eks.outputs.oidc_issuer_host
 
   tags = {
     ManagedBy   = "terraform"

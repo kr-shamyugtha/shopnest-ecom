@@ -11,7 +11,7 @@ backend:
     # has no registry object to name the way ACR does, so the account ID is
     # part of the host. Read it from the shared/ecr unit's registry_url
     # output, or from `aws sts get-caller-identity`.
-    repository: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/shopnest/shopnest-backend
+    repository: 700558813872.dkr.ecr.ap-southeast-2.amazonaws.com/shopnest/shopnest-backend
 
   config:
     port: "5000"
@@ -20,7 +20,7 @@ backend:
 
 frontend:
   image:
-    repository: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/shopnest/shopnest-frontend
+    repository: 700558813872.dkr.ecr.ap-southeast-2.amazonaws.com/shopnest/shopnest-frontend
 
 secrets:
   enabled: true
@@ -28,7 +28,7 @@ secrets:
 
   aws:
     # Set per environment, since staging and prod live in other regions.
-    region: "eu-central-1"
+    region: "ap-southeast-2"
 
 workloadIdentity:
   enabled: true

@@ -77,36 +77,37 @@ resource "aws_iam_role_policy_attachment" "node_ssm" {
 }
 
 # ==========================================================
-# EBS CSI driver role (IRSA)
+# Shared Pod Identity trust policy
 # ==========================================================
+#
+# Every Pod Identity role trusts the same service principal. Which pod may
+# actually use a role is decided by the aws_eks_pod_identity_association
+# (cluster + namespace + service account), not by the trust policy — the
+# reverse of IRSA, where the service account was a trust-policy condition.
 
-data "aws_iam_policy_document" "ebs_csi_assume" {
+data "aws_iam_policy_document" "pod_identity_assume" {
   statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect = "Allow"
+
+    # sts:TagSession is required on top of AssumeRole: the Pod Identity
+    # agent tags every session with the cluster, namespace and service
+    # account it was issued for.
+    actions = ["sts:AssumeRole", "sts:TagSession"]
 
     principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.this.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_issuer_host}:sub"
-      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_issuer_host}:aud"
-      values   = ["sts.amazonaws.com"]
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
     }
   }
 }
 
+# ==========================================================
+# EBS CSI driver role
+# ==========================================================
+
 resource "aws_iam_role" "ebs_csi" {
   name               = "${local.cluster_name}-ebs-csi"
-  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
   tags               = var.tags
 }
 
@@ -116,51 +117,36 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
 }
 
 # ==========================================================
-# Backend workload identity (IRSA)
+# Backend workload identity (Pod Identity)
 # ==========================================================
 #
 # Direct counterpart to the azurerm_user_assigned_identity +
-# azurerm_federated_identity_credential pair on the Azure side. The trust
-# condition below is the same statement as the Azure federated credential's
-# subject: "the service account <workload_service_account> in namespace
-# <workload_namespace> on this cluster's issuer, and nothing else".
+# azurerm_federated_identity_credential pair on the Azure side. The Azure
+# federated credential's subject ("this service account in this namespace
+# on this cluster, and nothing else") becomes the pod identity association
+# below.
 #
 # The permission to actually read secrets is NOT attached here — it is
 # granted by the secrets-manager module, mirroring how the Azure Key Vault
 # module grants "Key Vault Secrets User" to this identity rather than the
 # aks module doing it.
 
-data "aws_iam_policy_document" "backend_assume" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
-    principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.this.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_issuer_host}:sub"
-      values   = ["system:serviceaccount:${var.workload_namespace}:${var.workload_service_account}"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_issuer_host}:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-  }
-}
-
 resource "aws_iam_role" "backend" {
-  # Name is referenced verbatim by the ci-oidc module's read permission and
+  # Name is referenced verbatim by the ci-identity module's read permission and
   # by the pipeline's `aws iam get-role` lookup — changing the pattern means
   # changing both.
   name               = "${var.project_name}-${var.environment}-backend"
   description        = "ShopNest backend workload identity for ${local.cluster_name}"
-  assume_role_policy = data.aws_iam_policy_document.backend_assume.json
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
+
+  tags = var.tags
+}
+
+resource "aws_eks_pod_identity_association" "backend" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = var.workload_namespace
+  service_account = var.workload_service_account
+  role_arn        = aws_iam_role.backend.arn
 
   tags = var.tags
 }

@@ -8,26 +8,17 @@
 # would be a setting that quietly does nothing.
 # ============================================================================
 
+# Pod Identity rather than IRSA: the Free plan's SCP denies creating the IAM
+# OIDC provider IRSA depends on. Which pod may use this role is bound by the
+# association below, not by the trust policy.
 data "aws_iam_policy_document" "assume" {
   statement {
     effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    actions = ["sts:AssumeRole", "sts:TagSession"]
 
     principals {
-      type        = "Federated"
-      identifiers = [var.oidc_provider_arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${var.oidc_issuer_host}:sub"
-      values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${var.oidc_issuer_host}:aud"
-      values   = ["sts.amazonaws.com"]
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
     }
   }
 }
@@ -96,6 +87,15 @@ resource "aws_iam_role_policy_attachment" "this" {
   policy_arn = aws_iam_policy.this.arn
 }
 
+resource "aws_eks_pod_identity_association" "this" {
+  cluster_name    = var.cluster_name
+  namespace       = "kube-system"
+  service_account = "cluster-autoscaler"
+  role_arn        = aws_iam_role.this.arn
+
+  tags = var.tags
+}
+
 resource "helm_release" "this" {
   name       = "cluster-autoscaler"
   repository = "https://kubernetes.github.io/autoscaler"
@@ -118,10 +118,6 @@ resource "helm_release" "this" {
     value = "cluster-autoscaler"
   }
 
-  set {
-    name  = "rbac.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.this.arn
-  }
 
   # The autoscaler refuses to evict pods backed by a PodDisruptionBudget it
   # cannot satisfy, and both app Deployments have one (minAvailable: 1). On
@@ -138,5 +134,8 @@ resource "helm_release" "this" {
     value = "true"
   }
 
-  depends_on = [aws_iam_role_policy_attachment.this]
+  depends_on = [
+    aws_iam_role_policy_attachment.this,
+    aws_eks_pod_identity_association.this,
+  ]
 }

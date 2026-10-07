@@ -13,3 +13,14 @@ variable "replica_count" {
   type    = number
   default = 1
 }
+
+variable "public_subnet_ids" {
+  description = "Public subnets the internet-facing NLB is placed in, one Elastic IP each."
+  type        = list(string)
+  default     = []
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

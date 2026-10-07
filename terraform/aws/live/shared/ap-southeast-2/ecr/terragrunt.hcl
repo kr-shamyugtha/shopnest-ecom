@@ -18,16 +18,16 @@ dependency "resource_group" {
   config_path = "../resource-group"
   mock_outputs = {
     name   = "mock-rg"
-    region = "eu-central-1"
+    region = "ap-southeast-2"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
 
-dependency "ci_oidc" {
-  config_path = "../ci-oidc"
+dependency "ci_identity" {
+  config_path = "../ci-identity"
   mock_outputs = {
-    role_name = "mock-ci-role"
-    role_arn  = "arn:aws:iam::000000000000:role/mock-ci-role"
+    user_name     = "mock-ci-user"
+    principal_arn = "arn:aws:iam::000000000000:user/mock-ci-user"
   }
   mock_outputs_allowed_terraform_commands = ["validate"]
 }
@@ -40,8 +40,8 @@ inputs = {
   repositories = ["shopnest-backend", "shopnest-frontend"]
 
   # Counterpart to the Azure unit's ci_principal_id, resolved from the
-  # ci-oidc unit rather than pasted in as a GUID.
-  ci_role_name = dependency.ci_oidc.outputs.role_name
+  # ci-identity unit rather than pasted in as a GUID.
+  ci_user_name = dependency.ci_identity.outputs.user_name
 
   # Deliberately empty. ECR needs a repository policy only for
   # cross-account pulls; the clusters live in this same account and pull via

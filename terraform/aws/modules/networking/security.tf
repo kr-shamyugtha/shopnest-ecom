@@ -169,7 +169,8 @@ resource "aws_network_acl_rule" "private_out_all" {
 
 resource "aws_security_group" "cluster" {
   name        = "${local.name}-eks-cluster-sg"
-  description = "EKS control plane <-> node communication for ${local.name}"
+  # EC2 rejects < and > (among others) in security group descriptions.
+  description = "EKS control plane to and from node communication for ${local.name}"
   vpc_id      = aws_vpc.this.id
 
   tags = merge(var.tags, {

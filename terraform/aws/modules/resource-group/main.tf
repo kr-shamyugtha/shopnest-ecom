@@ -8,7 +8,9 @@
 # down to every other unit in the environment.
 resource "aws_resourcegroups_group" "this" {
   name        = var.name
-  description = "All ${var.name} resources, grouped by tag. Terraform-managed."
+  # Resource Groups only accepts letters, digits, spaces and _ . - here, so
+  # no commas or other punctuation.
+  description = "All ${var.name} resources grouped by tag. Terraform-managed."
 
   resource_query {
     query = jsonencode({

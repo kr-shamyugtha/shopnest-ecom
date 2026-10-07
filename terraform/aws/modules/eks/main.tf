@@ -1,11 +1,5 @@
 locals {
   cluster_name = "${var.project_name}-${var.environment}-eks"
-
-  # IRSA trust-policy conditions key off the issuer *without* its scheme —
-  # "oidc.eks.<region>.amazonaws.com/id/ABC123", not the full https:// URL.
-  # Leaving the scheme on makes the condition silently never match, which
-  # surfaces much later as an opaque AccessDenied from the pod.
-  oidc_issuer_host = replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")
 }
 
 data "aws_caller_identity" "current" {}
@@ -102,22 +96,29 @@ resource "aws_cloudwatch_log_group" "cluster" {
 }
 
 # ==========================================================
-# OIDC provider (the oidc_issuer_enabled / workload_identity_enabled pair)
+# Workload identity: EKS Pod Identity (the workload_identity_enabled
+# counterpart)
 # ==========================================================
 #
-# AKS turns both of these on with a boolean and manages the issuer for you.
-# On EKS the issuer exists as soon as the cluster does, but nothing trusts
-# it until it is registered with IAM as an OIDC provider — that registration
-# is what makes IRSA (the workload-identity equivalent) work at all.
+# AKS turns on its OIDC issuer and workload identity with two booleans.
+# The usual EKS equivalent is IRSA, which needs the cluster's issuer
+# registered as an IAM OIDC provider — and the AWS Free plan's SCP denies
+# iam:CreateOpenIDConnectProvider outright. EKS Pod Identity reaches the
+# same end (a pod's service account maps to an IAM role, no static keys)
+# without any OIDC provider: a node-local agent hands out credentials, and
+# roles trust the pods.eks.amazonaws.com service instead of an issuer. The
+# agent is a managed add-on like the three below.
 
-data "tls_certificate" "oidc" {
-  url = aws_eks_cluster.this.identity[0].oidc[0].issuer
-}
+resource "aws_eks_addon" "pod_identity_agent" {
+  cluster_name  = aws_eks_cluster.this.name
+  addon_name    = "eks-pod-identity-agent"
+  addon_version = var.addon_versions.pod_identity_agent
 
-resource "aws_iam_openid_connect_provider" "this" {
-  url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.oidc.certificates[0].sha1_fingerprint]
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  # A DaemonSet, so it needs nodes to land on before it reports ACTIVE.
+  depends_on = [aws_eks_node_group.system]
 
   tags = var.tags
 }
@@ -191,7 +192,7 @@ resource "aws_eks_node_group" "system" {
 #
 # AKS bundles CNI, CoreDNS, kube-proxy, a CSI driver set and metrics-server
 # into the cluster resource itself. On EKS the first three are explicit
-# managed add-ons, EBS CSI needs its own IRSA role, and metrics-server is
+# managed add-ons, EBS CSI needs its own Pod Identity role, and metrics-server is
 # not provided at all (it gets its own Helm module — the HPAs in the chart
 # do not work without it).
 
@@ -206,6 +207,13 @@ resource "aws_eks_addon" "vpc_cni" {
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
+
+  # AKS enforces the chart's NetworkPolicies through its network policy
+  # engine. The VPC CNI ships its own enforcement, but off by default — the
+  # policies would be accepted by the API server and silently do nothing.
+  configuration_values = jsonencode({
+    enableNetworkPolicy = var.enable_network_policy ? "true" : "false"
+  })
 
   tags = var.tags
 }
@@ -241,15 +249,32 @@ resource "aws_eks_addon" "coredns" {
 # Alertmanager 2Gi) have no provisioner on a bare EKS cluster — AKS ships
 # one by default, EKS does not.
 resource "aws_eks_addon" "ebs_csi" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "aws-ebs-csi-driver"
-  addon_version            = var.addon_versions.ebs_csi
-  service_account_role_arn = aws_iam_role.ebs_csi.arn
+  cluster_name  = aws_eks_cluster.this.name
+  addon_name    = "aws-ebs-csi-driver"
+  addon_version = var.addon_versions.ebs_csi
+
+  pod_identity_association {
+    role_arn        = aws_iam_role.ebs_csi.arn
+    service_account = "ebs-csi-controller-sa"
+  }
+
+  # A default StorageClass (gp3), so PVCs that name no class bind exactly as
+  # they do on AKS. Without it the monitoring stack's four PVCs would have to
+  # name a class explicitly, and the Azure and AWS monitoring values would
+  # differ for no reason other than this.
+  configuration_values = jsonencode({
+    defaultStorageClass = {
+      enabled = true
+    }
+  })
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  depends_on = [aws_eks_node_group.system]
+  depends_on = [
+    aws_eks_node_group.system,
+    aws_eks_addon.pod_identity_agent,
+  ]
 
   tags = var.tags
 }
