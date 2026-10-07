@@ -1,0 +1,433 @@
+# ============================================================================
+# ShopNest - AWS delivery pipeline
+# ============================================================================
+# Stage-for-stage counterpart to ci/azure-pipelines.yml:
+#
+#   Test -> Build -> CodeQuality -> DockerBuild -> SecurityScan
+#        -> PushToECR (was PushToACR) -> UpdateGitOpsConfig (was DeployToAKS)
+#
+# Same two guarantees as the Azure pipeline: the image that gets pushed is
+# byte-for-byte the one Trivy scanned (it travels between jobs as a saved
+# tar artifact, never rebuilt), and a pull request can run every check but
+# cannot push to the registry or commit to the GitOps config.
+#
+# Auth is OIDC only — no long-lived AWS keys in repository secrets. The role
+# is created by terraform/aws/live/shared/eu-central-1/ci-oidc and its trust
+# policy additionally restricts assumption to refs/heads/main, so the
+# PR guards below are belt-and-braces rather than the only control.
+# ============================================================================
+
+name: AWS CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  # Mirrors the Azure pipeline's `git pull --rebase` guard against two runs
+  # racing to push the GitOps commit — here the race is prevented outright
+  # rather than recovered from.
+  group: aws-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_NAMESPACE: shopnest
+  BACKEND_REPO: shopnest/shopnest-backend
+  FRONTEND_REPO: shopnest/shopnest-frontend
+  GITOPS_CONFIG: helm/shopnest/environments/aws/dev.yaml
+  BACKEND_ROLE_NAME: shopnest-dev-backend
+
+jobs:
+
+  # ============================================================
+  # Stage 1: Test
+  # ============================================================
+  test:
+    name: Backend and Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Run Backend Tests
+        working-directory: backend
+        run: |
+          npm ci
+          npm test -- --ci
+
+      - name: Run Frontend Tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test -- --watchAll=false
+
+  # ============================================================
+  # Stage 2: Build
+  # ============================================================
+  build:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  # ============================================================
+  # Stage 3: SonarCloud Code Quality
+  # ============================================================
+  code-quality:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Sonar's new-code detection needs full history; a shallow clone
+          # makes it treat every line as new.
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=kr-shamyugtha
+
+      - name: Check Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ============================================================
+  # Stage 4: Docker Build
+  # ============================================================
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and Save Docker Images
+        run: |
+          set -euo pipefail
+
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          VERSION="1.0.${{ github.run_number }}"
+
+          echo "=========================================="
+          echo "Building ShopNest Docker images"
+          echo "=========================================="
+          echo "Version: $VERSION"
+          echo "Build Date: $BUILD_DATE"
+
+          # Built with the bare repository name and retagged against the
+          # real registry host only at push time. The registry host embeds
+          # the AWS account ID, which is not known until the OIDC role is
+          # assumed — and this job deliberately has no AWS credentials.
+          docker build \
+            --build-arg BUILD_DATE="$BUILD_DATE" \
+            --build-arg VERSION="$VERSION" \
+            -t "${BACKEND_REPO}:${VERSION}" \
+            ./backend
+
+          docker build \
+            --build-arg BUILD_DATE="$BUILD_DATE" \
+            --build-arg VERSION="$VERSION" \
+            -t "${FRONTEND_REPO}:${VERSION}" \
+            ./frontend
+
+          echo "=========================================="
+          echo "Verifying Docker images"
+          echo "=========================================="
+
+          docker image inspect "${BACKEND_REPO}:${VERSION}" > /dev/null
+          docker image inspect "${FRONTEND_REPO}:${VERSION}" > /dev/null
+
+          mkdir -p docker-images
+
+          docker save "${BACKEND_REPO}:${VERSION}"  -o docker-images/shopnest-backend.tar
+          docker save "${FRONTEND_REPO}:${VERSION}" -o docker-images/shopnest-frontend.tar
+
+          ls -lh docker-images
+
+      - name: Publish Docker Images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: docker-images
+          retention-days: 1
+
+  # ============================================================
+  # Stage 5: Container Security Scan - Trivy
+  # ============================================================
+  security-scan:
+    name: Trivy Container Security Scan
+    runs-on: ubuntu-latest
+    needs: docker-build
+
+    steps:
+      - name: Download Docker Images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: docker-images
+
+      - name: Load Docker Images
+        run: |
+          set -euo pipefail
+          docker load -i docker-images/shopnest-backend.tar
+          docker load -i docker-images/shopnest-frontend.tar
+          docker images | grep shopnest
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | gpg --dearmor \
+            | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
+            | sudo tee /etc/apt/sources.list.d/trivy.list
+
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          trivy --version
+
+      - name: Trivy Scan - Backend
+        run: |
+          set -euo pipefail
+          VERSION="1.0.${{ github.run_number }}"
+
+          trivy image \
+            --exit-code 1 \
+            --severity CRITICAL \
+            --no-progress \
+            --timeout 5m \
+            --ignore-unfixed \
+            "${BACKEND_REPO}:${VERSION}"
+
+      - name: Trivy Scan - Frontend
+        run: |
+          set -euo pipefail
+          VERSION="1.0.${{ github.run_number }}"
+
+          trivy image \
+            --exit-code 1 \
+            --severity CRITICAL \
+            --no-progress \
+            --timeout 5m \
+            --ignore-unfixed \
+            "${FRONTEND_REPO}:${VERSION}"
+
+  # ============================================================
+  # Stage 6: Push Images to ECR
+  # ============================================================
+  push-to-ecr:
+    name: Push Docker Images to ECR
+    runs-on: ubuntu-latest
+    needs: security-scan
+    # PR runs stop here — no point pushing images from unreviewed, unmerged
+    # code to the shared registry.
+    if: github.event_name != 'pull_request'
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      registry: ${{ steps.login-ecr.outputs.registry }}
+
+    steps:
+      - name: Download Scanned Docker Images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: docker-images
+
+      - name: Load Docker Images
+        run: |
+          set -euo pipefail
+          docker load -i docker-images/shopnest-backend.tar
+          docker load -i docker-images/shopnest-frontend.tar
+          docker images | grep shopnest
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push Images
+        run: |
+          set -euo pipefail
+
+          VERSION="1.0.${{ github.run_number }}"
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+
+          BACKEND_IMAGE="${REGISTRY}/${BACKEND_REPO}:${VERSION}"
+          FRONTEND_IMAGE="${REGISTRY}/${FRONTEND_REPO}:${VERSION}"
+
+          # Retag the exact scanned images — no rebuild, so the digest that
+          # Trivy cleared is the digest that reaches the registry.
+          docker tag "${BACKEND_REPO}:${VERSION}"  "$BACKEND_IMAGE"
+          docker tag "${FRONTEND_REPO}:${VERSION}" "$FRONTEND_IMAGE"
+
+          docker push "$BACKEND_IMAGE"
+          docker push "$FRONTEND_IMAGE"
+
+          echo "Pushed:"
+          echo "  $BACKEND_IMAGE"
+          echo "  $FRONTEND_IMAGE"
+
+  # ============================================================
+  # Stage 7: Update GitOps config (Argo CD deploys, not this workflow)
+  # ============================================================
+  update-gitops-config:
+    name: Commit New Image Tag to GitOps Config
+    runs-on: ubuntu-latest
+    needs: push-to-ecr
+    # Same reasoning as push-to-ecr — a PR shouldn't be able to commit to
+    # the GitOps config and trigger a real deploy before it's even merged.
+    if: github.event_name != 'pull_request'
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # The default GITHUB_TOKEN credential is persisted so the push
+          # below can authenticate without a PAT.
+          persist-credentials: true
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install yq
+        run: |
+          set -euo pipefail
+          sudo wget -q "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      # ----------------------------------------------------
+      # Fetch the identity AND update the config in one step, for the same
+      # reason ci/azure-pipelines.yml merges them: the fetched value is used
+      # immediately by the very next command, so a plain shell variable is
+      # unambiguous where passing it between steps is not.
+      #
+      # The counterpart to `az identity show` is `aws iam get-role` — the
+      # IRSA role ARN, not a client ID, is what the ServiceAccount
+      # annotation needs.
+      # ----------------------------------------------------
+      - name: Fetch Backend Role and Update GitOps Config
+        run: |
+          set -euo pipefail
+
+          BACKEND_ROLE_ARN=$(aws iam get-role \
+            --role-name "$BACKEND_ROLE_NAME" \
+            --query 'Role.Arn' --output text)
+
+          echo "=============================================="
+          echo "Fetched backend role ARN:"
+          echo "$BACKEND_ROLE_ARN"
+          echo "=============================================="
+
+          if [ -z "$BACKEND_ROLE_ARN" ] || [ "$BACKEND_ROLE_ARN" = "None" ]; then
+            echo "ERROR: fetched role ARN is empty — aborting rather than writing a blank value."
+            exit 1
+          fi
+
+          REGISTRY="${{ needs.push-to-ecr.outputs.registry }}"
+          if [ -z "$REGISTRY" ]; then
+            echo "ERROR: ECR registry host was not passed through from the push job."
+            exit 1
+          fi
+
+          VERSION="1.0.${{ github.run_number }}"
+
+          echo "=============================================="
+          echo "Updating $GITOPS_CONFIG (version $VERSION)"
+          echo "=============================================="
+
+          yq -i ".backend.image.tag = \"$VERSION\"" "$GITOPS_CONFIG"
+          yq -i ".frontend.image.tag = \"$VERSION\"" "$GITOPS_CONFIG"
+          yq -i ".workloadIdentity.roleArn = \"$BACKEND_ROLE_ARN\"" "$GITOPS_CONFIG"
+
+          # The repository host embeds the AWS account ID, so it is written
+          # from the live registry value rather than committed as a literal
+          # in values-aws.yaml (which ships an obvious placeholder).
+          yq -i ".backend.image.repository = \"$REGISTRY/$BACKEND_REPO\"" "$GITOPS_CONFIG"
+          yq -i ".frontend.image.repository = \"$REGISTRY/$FRONTEND_REPO\"" "$GITOPS_CONFIG"
+
+          echo "=============================================="
+          echo "Resulting $GITOPS_CONFIG contents"
+          echo "=============================================="
+          cat "$GITOPS_CONFIG"
+
+      - name: Commit and Push
+        run: |
+          set -euo pipefail
+
+          VERSION="1.0.${{ github.run_number }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$GITOPS_CONFIG"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit — config already matches this version."
+            exit 0
+          fi
+
+          git commit -m "ci: bump AWS dev image tag to $VERSION [skip ci]"
+
+          # Guard against another run having pushed in the meantime — rebase
+          # onto whatever is actually on main right now before pushing,
+          # rather than risking a rejected push or a silently stale one.
+          git pull --rebase origin main
+          git push origin HEAD:main

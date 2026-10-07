@@ -1,0 +1,29 @@
+backend:
+  image:
+    tag: "1.0.25"
+
+frontend:
+  image:
+    tag: "1.0.25"
+  # Still the test key — prod isn't live yet. Replace with a real Razorpay
+  # live key ID once prod actually goes live.
+  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+
+secrets:
+  aws:
+    region: "us-east-1"
+    secretPrefix: "shopnest/prod"
+
+workloadIdentity:
+  roleArn: "arn:aws:iam::123456789012:role/shopnest-prod-backend"
+
+ingress:
+  # Replace with a real domain and a real (non-self-signed) cert-manager
+  # issuer before this is ever actually serving real traffic — the
+  # self-signed setup mirrors dev/staging only because no domain exists yet.
+  # On AWS the natural production issuer is ACME DNS-01 against Route 53.
+  # Deploying with host left empty will fail loudly via the `required` guard
+  # in ingress.yaml rather than silently rendering a broken Ingress.
+  host: ""
+  tls:
+    enabled: true

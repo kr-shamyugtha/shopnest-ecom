@@ -1,0 +1,25 @@
+backend:
+  image:
+    tag: "1.0.25"
+
+frontend:
+  image:
+    tag: "1.0.25"
+  razorpayKeyId: "rzp_test_TOpPJJoN5F2yHB"
+
+secrets:
+  aws:
+    region: "eu-west-1"
+    secretPrefix: "shopnest/staging"
+
+workloadIdentity:
+  roleArn: "arn:aws:iam::123456789012:role/shopnest-staging-backend"
+
+ingress:
+  # Fill in once ingress-nginx is actually applied to staging and its NLB
+  # hostname is known. Deploying with this left empty while tls.enabled is
+  # true will fail loudly via the `required` guard in ingress.yaml rather
+  # than silently rendering a broken Ingress.
+  host: ""
+  tls:
+    enabled: true
