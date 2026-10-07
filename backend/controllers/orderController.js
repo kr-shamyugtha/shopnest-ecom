@@ -6,6 +6,10 @@ const {
 } = require('../metrics/metrics');
 
 const addOrderItems = async (req, res) => {
+  // Set once the order is in the database, so a later failure (the
+  // confirmation email) isn't also counted as a failed order creation.
+  let saved = false;
+
   try {
     const { items, totalAmount, address, paymentId } = req.body;
 
@@ -21,7 +25,8 @@ const addOrderItems = async (req, res) => {
       });
 
       const createdOrder = await order.save();
-     
+      saved = true;
+      ordersCreatedTotal.inc();
 
       // Send Order Confirmation Email
       const message = `
@@ -42,7 +47,9 @@ const addOrderItems = async (req, res) => {
       res.status(201).json(createdOrder);
     }
   } catch (error) {
-    orderCreationFailuresTotal.inc();
+    if (!saved) {
+      orderCreationFailuresTotal.inc();
+    }
 
     res.status(500).json({
       message: error.message

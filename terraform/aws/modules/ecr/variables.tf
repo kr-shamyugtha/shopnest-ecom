@@ -45,8 +45,8 @@ variable "pull_principal_arns" {
   default     = []
 }
 
-variable "ci_role_name" {
-  description = "Name of the CI/CD pipeline's IAM role, granted push access. Null skips the grant. Counterpart to the Azure module's ci_principal_id."
+variable "ci_user_name" {
+  description = "Name of the CI/CD pipeline's IAM user, granted push access. Null skips the grant. Counterpart to the Azure module's ci_principal_id."
   type        = string
   default     = null
 }

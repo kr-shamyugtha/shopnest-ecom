@@ -1,17 +1,22 @@
-# AWS counterpart to argocd/values-monitoring.yaml — same kube-prometheus-stack
-# + Loki + Alloy trio, at the same chart versions.
+# AWS counterpart to argocd/values-monitoring.yaml — the same
+# kube-prometheus-stack + Loki + Alloy trio at the same chart versions, the
+# same tuning, alert rules and ShopNest dashboard. It is generated from the
+# Azure file so the two cannot drift again; only these differ:
 #
-# The only substantive difference is storage. On AKS a PVC with no
-# storageClassName binds to the cluster's default class automatically. EKS
-# has no dynamic provisioner at all until the aws-ebs-csi-driver add-on is
-# installed (it is, from terraform/aws/modules/eks), and its gp2 class is
-# named explicitly on all four PVCs below rather than relied on as the
-# default. A PVC that silently stays Pending is the failure mode otherwise,
-# and it surfaces as a Prometheus pod stuck in ContainerCreating with
-# nothing obviously wrong anywhere else.
+#   - Hostnames: grafana./prometheus.<ip>.nip.io on the ingress-nginx NLB's
+#     fixed Elastic IP (terraform/aws/modules/ingress-nginx), the AWS
+#     counterpart to the AKS LoadBalancer's static IP.
+#   - Dashboard: titled "(AWS)" with its own uid.
+#   - Alert receiver: no Teams webhook exists on the AWS side, so
+#     Alertmanager routes to a "null" receiver. Alerts still fire and are
+#     visible in Alertmanager and Grafana; point the receiver somewhere real
+#     (and mount its secret, as the Azure file does) to get notifications.
+#   - Storage: unchanged. PVCs name no storageClassName and bind to the
+#     cluster default, which on EKS is the gp3 class the aws-ebs-csi-driver
+#     add-on is configured to create (terraform/aws/modules/eks).
 #
-# gp3 is cheaper and faster than gp2; switch by creating a gp3 StorageClass
-# and changing storageClassName below.
+# To change anything shared, edit values-monitoring.yaml and regenerate this
+# file the same way rather than editing both by hand.
 
 applications:
   monitoring:
@@ -32,11 +37,52 @@ applications:
               enabled: true
               deploymentStrategy:
                 type: Recreate
+
+              # Point at a secret created OUT OF BAND, not one this chart
+              # generates. Without this the chart mints a NEW random admin
+              # password into monitoring-grafana on every render - but
+              # persistence is enabled, so Grafana keeps the password it
+              # wrote into its SQLite DB at first install. The two diverge
+              # immediately and every subsequent login fails with
+              # "Invalid username or password", including the sidecar's own
+              # provisioning reload calls (visible as 401s in the logs).
+              #
+              # Created once, deliberately not in Git:
+              #   kubectl create secret generic grafana-admin-credentials \
+              #     -n monitoring \
+              #     --from-literal=admin-user=admin \
+              #     --from-literal=admin-password='<password>'
+              #
+              # If the DB and this secret are already out of step, realign
+              # them once with:
+              #   kubectl exec -n monitoring deploy/monitoring-grafana -c grafana -- \
+              #     grafana cli --homepath /usr/share/grafana \
+              #     admin reset-admin-password '<password>'
+              admin:
+                existingSecret: grafana-admin-credentials
+                userKey: admin-user
+                passwordKey: admin-password
               persistence:
                 enabled: true
                 type: pvc
-                storageClassName: gp2
                 size: 5Gi
+              # Sized from MEASURED usage, not guessed. The first attempt at
+              # this (limit 256Mi) OOMKilled Grafana twice - exit 137 - because
+              # steady-state sits at ~190Mi and rendering a dashboard spikes
+              # well past that. Grafana loads all 30 provisioned dashboards
+              # into memory, so it is the heaviest thing in this namespace
+              # despite looking like the lightest.
+              #
+              # Observed: cpu 129m, memory 189Mi. Request now covers the
+              # steady state; the limit leaves room for render spikes rather
+              # than sitting on top of them.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
               additionalDataSources:
                 - name: Loki
                   type: loki
@@ -44,14 +90,1718 @@ applications:
                   url: http://loki-gateway.monitoring.svc.cluster.local
                   isDefault: false
 
+              # nip.io resolves any subdomain of an IP back to that IP, so
+              # this reaches ingress-nginx's existing LoadBalancer with no
+              # real DNS record needed. Only safe because this is a
+              # throwaway dev cluster — login is Grafana's own auth, with
+              # nothing in front of it. Tied to the LoadBalancer's current
+              # IP: if it ever changes (e.g. a full AKS rebuild), this
+              # hostname needs updating to match.
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hosts:
+                  - grafana.15.135.205.45.nip.io
+
+              # ------------------------------------------------------
+              # ShopNest dashboard, provisioned as a file through Grafana's
+              # dashboardProviders rather than through the chart's
+              # extraManifests.
+              #
+              # extraManifests looks like the obvious place, but it renders
+              # every manifest through Helm's `tpl`. Grafana's legend syntax
+              # is {{label}}, which Helm then tries to evaluate as a function
+              # call and the whole sync dies with
+              #   function "route" not defined
+              # This path embeds the JSON verbatim - verified by rendering
+              # the chart locally - so Grafana's braces survive intact.
+              #
+              # Every query uses only metrics backend/metrics/metrics.js
+              # actually exports. Denominators are wrapped in
+              # clamp_min(..., 1e-9) so the percentage panels read 0 at idle
+              # instead of NaN.
+              # ------------------------------------------------------
+              dashboardProviders:
+                dashboardproviders.yaml:
+                  apiVersion: 1
+                  providers:
+                    - name: shopnest
+                      orgId: 1
+                      folder: ShopNest
+                      type: file
+                      disableDeletion: false
+                      editable: true
+                      options:
+                        path: /var/lib/grafana/dashboards/shopnest
+              dashboards:
+                shopnest:
+                  shopnest-red-aws:
+                    json: |
+                      {
+                        "title": "ShopNest \u2014 Platform Overview (AWS)",
+                        "uid": "shopnest-red-aws",
+                        "tags": [
+                          "shopnest"
+                        ],
+                        "timezone": "browser",
+                        "schemaVersion": 39,
+                        "refresh": "30s",
+                        "editable": true,
+                        "time": {
+                          "from": "now-1h",
+                          "to": "now"
+                        },
+                        "templating": {
+                          "list": [
+                            {
+                              "name": "DS_PROMETHEUS",
+                              "type": "datasource",
+                              "query": "prometheus",
+                              "label": "Prometheus",
+                              "current": {
+                                "text": "Prometheus",
+                                "value": "Prometheus"
+                              },
+                              "hide": 0,
+                              "refresh": 1
+                            },
+                            {
+                              "name": "DS_LOKI",
+                              "type": "datasource",
+                              "query": "loki",
+                              "label": "Loki",
+                              "current": {
+                                "text": "Loki",
+                                "value": "Loki"
+                              },
+                              "hide": 0,
+                              "refresh": 1
+                            },
+                            {
+                              "name": "namespace",
+                              "type": "query",
+                              "datasource": {
+                                "type": "prometheus",
+                                "uid": "${DS_PROMETHEUS}"
+                              },
+                              "query": "label_values(kube_pod_info, namespace)",
+                              "label": "Namespace",
+                              "refresh": 2,
+                              "includeAll": true,
+                              "multi": true,
+                              "sort": 1,
+                              "current": {
+                                "text": "shopnest",
+                                "value": "shopnest"
+                              },
+                              "allValue": ".*"
+                            },
+                            {
+                              "name": "pod",
+                              "type": "query",
+                              "datasource": {
+                                "type": "prometheus",
+                                "uid": "${DS_PROMETHEUS}"
+                              },
+                              "query": "label_values(kube_pod_info{namespace=~\"$namespace\"}, pod)",
+                              "label": "Pod",
+                              "refresh": 2,
+                              "includeAll": true,
+                              "multi": true,
+                              "sort": 1,
+                              "current": {
+                                "text": "All",
+                                "value": "$__all"
+                              },
+                              "allValue": ".*"
+                            },
+                            {
+                              "name": "route",
+                              "type": "query",
+                              "datasource": {
+                                "type": "prometheus",
+                                "uid": "${DS_PROMETHEUS}"
+                              },
+                              "query": "label_values(shopnest_http_requests_total{job=\"backend\"}, route)",
+                              "label": "Route",
+                              "refresh": 2,
+                              "includeAll": true,
+                              "multi": true,
+                              "sort": 1,
+                              "current": {
+                                "text": "All",
+                                "value": "$__all"
+                              },
+                              "allValue": ".*"
+                            }
+                          ]
+                        },
+                        "panels": [
+                          {
+                            "id": 41,
+                            "type": "row",
+                            "title": "Data health",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 0
+                            },
+                            "panels": []
+                          },
+                          {
+                            "id": 42,
+                            "type": "stat",
+                            "title": "Backend scrape targets up",
+                            "description": "Backend pods Prometheus is successfully scraping. 0 or DOWN means every HTTP panel below is empty because nothing is being collected, not because there is no traffic.",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 4,
+                              "w": 8,
+                              "x": 0,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "sum(up{job=\"backend\"})",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "mappings": [],
+                                "noValue": "DOWN",
+                                "color": {
+                                  "mode": "thresholds"
+                                },
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "red",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "green",
+                                      "value": 1
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "colorMode": "background",
+                              "graphMode": "none",
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "value"
+                            }
+                          },
+                          {
+                            "id": 43,
+                            "type": "stat",
+                            "title": "Atlas-backed metrics",
+                            "description": "OK when the last scrape refreshed every MongoDB-backed gauge (orders, statuses, payment attempts). STALE means a query failed and those panels are showing the last good value.",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 4,
+                              "w": 8,
+                              "x": 8,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "min(shopnest_db_metrics_up)",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "mappings": [
+                                  {
+                                    "type": "value",
+                                    "options": {
+                                      "0": {
+                                        "text": "STALE",
+                                        "color": "red"
+                                      },
+                                      "1": {
+                                        "text": "OK",
+                                        "color": "green"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "noValue": "DOWN",
+                                "color": {
+                                  "mode": "thresholds"
+                                },
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "red",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "green",
+                                      "value": 1
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "colorMode": "background",
+                              "graphMode": "none",
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "value"
+                            }
+                          },
+                          {
+                            "id": 44,
+                            "type": "stat",
+                            "title": "Unmatched API requests (in range)",
+                            "description": "Requests that matched no route (404s from scanners, typos, stale links). Grouped into one series so they cannot create a label per URL.",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 4,
+                              "w": 8,
+                              "x": 16,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "round(sum(increase(shopnest_http_requests_total{job=\"backend\", route=\"unmatched\"}[$__range])) or vector(0))",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "mappings": [],
+                                "noValue": "0",
+                                "color": {
+                                  "mode": "thresholds"
+                                },
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "green",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "orange",
+                                      "value": 50
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "colorMode": "background",
+                              "graphMode": "none",
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "value"
+                            }
+                          },
+                          {
+                            "id": 1,
+                            "type": "row",
+                            "title": "Orders  \u00b7  gauges read live from MongoDB Atlas on every scrape",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 5
+                            }
+                          },
+                          {
+                            "id": 2,
+                            "title": "Total Orders (Atlas)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 0,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_orders_total)",
+                                "legendFormat": "orders",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "Gauge: Order.countDocuments() at scrape time. max() not sum() - every backend replica reports the SAME database count, so sum() would multiply by replica count once the HPA scales past 1."
+                          },
+                          {
+                            "id": 3,
+                            "title": "Placed",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 4,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_orders_by_status{status=\"Placed\"})",
+                                "legendFormat": "placed",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "orange"
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "description": "Renamed from Pending in the Order model - 'Pending' read as though the shop had not accepted the order yet."
+                          },
+                          {
+                            "id": 4,
+                            "title": "Shipped",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 8,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_orders_by_status{status=\"Shipped\"})",
+                                "legendFormat": "shipped",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "blue"
+                                }
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 5,
+                            "title": "Delivered",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 12,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_orders_by_status{status=\"Delivered\"})",
+                                "legendFormat": "delivered",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "green"
+                                }
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 39,
+                            "title": "Cancelled",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 16,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_orders_by_status{status=\"Cancelled\"})",
+                                "legendFormat": "cancelled",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "red"
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "description": "Terminal state, only reachable while the order is still Placed. Never emitted at all before metrics.js was fixed to read the status list from the schema."
+                          },
+                          {
+                            "id": 6,
+                            "title": "Orders Created (in range)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 20,
+                              "y": 6
+                            },
+                            "targets": [
+                              {
+                                "expr": "round(sum(increase(shopnest_orders_created_total[$__range])) or vector(0))",
+                                "legendFormat": "created",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                },
+                                "instant": true,
+                                "range": false
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "text"
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "description": "Orders saved during the selected time range. Uses increase() over the range, so it is unaffected by pod restarts (a raw counter resets to 0 on every rollout)."
+                          },
+                          {
+                            "id": 40,
+                            "title": "Status totals vs order total (should match)",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 12,
+                              "x": 0,
+                              "y": 11
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(max by (status) (shopnest_orders_by_status))",
+                                "legendFormat": "sum of statuses",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "max(shopnest_orders_total)",
+                                "legendFormat": "orders_total (Atlas)",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "These two lines diverging means the status list metrics.js exports has drifted from the Order schema enum - which is exactly what happened when Pending became Placed and Cancelled was added: five orders vanished from the breakdown while orders_total kept counting them."
+                          },
+                          {
+                            "id": 7,
+                            "title": "Orders by Status Over Time",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 12,
+                              "x": 12,
+                              "y": 11
+                            },
+                            "targets": [
+                              {
+                                "expr": "max by (status) (shopnest_orders_by_status)",
+                                "legendFormat": "{{status}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 8,
+                            "title": "Order Creation / Failure Rate (per min)",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 6,
+                              "w": 24,
+                              "x": 0,
+                              "y": 17
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(rate(shopnest_orders_created_total[5m])) * 60",
+                                "legendFormat": "created/min",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "sum(rate(shopnest_order_creation_failures_total[5m])) * 60",
+                                "legendFormat": "failed/min",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "rate() is valid here - both are true counters. sum() is correct because each replica counts only its own work."
+                          },
+                          {
+                            "id": 9,
+                            "type": "row",
+                            "title": "Payments",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 23
+                            }
+                          },
+                          {
+                            "id": 10,
+                            "title": "Payment Attempts (Atlas)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 0,
+                              "y": 24
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_payment_attempts_total)",
+                                "legendFormat": "attempts",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "Despite the _total suffix this is a GAUGE - PaymentAttempt.countDocuments() at scrape time. rate() on it is semantically wrong; it is not a counter."
+                          },
+                          {
+                            "id": 11,
+                            "title": "Verification Successes (in range)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 6,
+                              "y": 24
+                            },
+                            "targets": [
+                              {
+                                "expr": "round(sum(increase(shopnest_payment_verification_success_total[$__range])) or vector(0))",
+                                "legendFormat": "success",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                },
+                                "instant": true,
+                                "range": false
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "green"
+                                }
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 12,
+                            "title": "Verification Failures (in range)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 12,
+                              "y": 24
+                            },
+                            "targets": [
+                              {
+                                "expr": "round(sum(increase(shopnest_payment_verification_failures_total[$__range])) or vector(0))",
+                                "legendFormat": "failures",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                },
+                                "instant": true,
+                                "range": false
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "red"
+                                }
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 13,
+                            "title": "Payment Success Rate (in range)",
+                            "type": "gauge",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 18,
+                              "y": 24
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(increase(shopnest_payment_verification_success_total[$__range])) / (sum(increase(shopnest_payment_verification_success_total[$__range])) + sum(increase(shopnest_payment_verification_failures_total[$__range])) > 0)",
+                                "legendFormat": "success rate",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                },
+                                "instant": true,
+                                "range": false
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "percentunit",
+                                "min": 0,
+                                "max": 1,
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "red",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "orange",
+                                      "value": 0.8
+                                    },
+                                    {
+                                      "color": "green",
+                                      "value": 0.95
+                                    }
+                                  ]
+                                },
+                                "noValue": "No payments"
+                              },
+                              "overrides": []
+                            },
+                            "description": "Successful / all verifications in the selected range. Shows \"No payments\" rather than 0% when there were none, so an idle shop does not read as a failing one."
+                          },
+                          {
+                            "id": 14,
+                            "title": "Verification Rate (per min)",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 29
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(rate(shopnest_payment_verification_success_total[5m])) * 60",
+                                "legendFormat": "success/min",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "sum(rate(shopnest_payment_verification_failures_total[5m])) * 60",
+                                "legendFormat": "failure/min",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 15,
+                            "title": "Payment Attempts Over Time (Atlas)",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 29
+                            },
+                            "targets": [
+                              {
+                                "expr": "max(shopnest_payment_attempts_total)",
+                                "legendFormat": "attempts",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "Plotted as the absolute gauge value. A rate() here would be meaningless."
+                          },
+                          {
+                            "id": 16,
+                            "type": "row",
+                            "title": "HTTP Performance  \u00b7  filtered by $route",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 36
+                            }
+                          },
+                          {
+                            "id": 17,
+                            "title": "Request Rate",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 0,
+                              "y": 37
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum(rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[5m])) or vector(0)",
+                                "legendFormat": "req/s",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "reqps"
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "auto",
+                              "colorMode": "value",
+                              "graphMode": "area"
+                            }
+                          },
+                          {
+                            "id": 18,
+                            "title": "Error Rate (5xx)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 6,
+                              "y": 37
+                            },
+                            "targets": [
+                              {
+                                "expr": "(sum(rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\", status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[5m])), 1e-9)",
+                                "legendFormat": "5xx",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "percentunit",
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "green",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "orange",
+                                      "value": 0.01
+                                    },
+                                    {
+                                      "color": "red",
+                                      "value": 0.05
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "description": "Share of API requests answered with 5xx over the last 5m. 4xx are client errors and are deliberately excluded. Health probes and metric scrapes are not counted (the backend does not meter them)."
+                          },
+                          {
+                            "id": 19,
+                            "title": "p95 Latency",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 12,
+                              "y": 37
+                            },
+                            "targets": [
+                              {
+                                "expr": "histogram_quantile(0.95, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
+                                "legendFormat": "p95",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "s"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 20,
+                            "title": "p99 Latency",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 6,
+                              "x": 18,
+                              "y": 37
+                            },
+                            "targets": [
+                              {
+                                "expr": "histogram_quantile(0.99, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
+                                "legendFormat": "p99",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "s"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 21,
+                            "title": "Request Rate by Route",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 42
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (route) (rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[5m]))",
+                                "legendFormat": "{{route}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "reqps"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 22,
+                            "title": "Latency Percentiles",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 42
+                            },
+                            "targets": [
+                              {
+                                "expr": "histogram_quantile(0.50, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
+                                "legendFormat": "p50",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "histogram_quantile(0.95, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
+                                "legendFormat": "p95",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "histogram_quantile(0.99, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
+                                "legendFormat": "p99",
+                                "refId": "C",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "s"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 23,
+                            "title": "Requests by Status Code (in range)",
+                            "type": "piechart",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 49
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (status_code) (increase(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[$__range]))",
+                                "legendFormat": "{{status_code}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                },
+                                "instant": true,
+                                "range": false
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 24,
+                            "title": "Requests by Route (in range)",
+                            "type": "piechart",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 49
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (route) (increase(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[$__range]))",
+                                "legendFormat": "{{route}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                },
+                                "instant": true,
+                                "range": false
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 25,
+                            "type": "row",
+                            "title": "Kubernetes  \u00b7  filtered by $namespace / $pod",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 56
+                            }
+                          },
+                          {
+                            "id": 26,
+                            "title": "Replicas Desired vs Available",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 57
+                            },
+                            "targets": [
+                              {
+                                "expr": "kube_deployment_spec_replicas{namespace=~\"$namespace\"}",
+                                "legendFormat": "{{deployment}} desired",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "kube_deployment_status_replicas_available{namespace=~\"$namespace\"}",
+                                "legendFormat": "{{deployment}} available",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 27,
+                            "title": "Pods by Phase",
+                            "type": "piechart",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 57
+                            },
+                            "targets": [
+                              {
+                                "expr": "count by (phase) (kube_pod_status_phase{namespace=~\"$namespace\"} == 1)",
+                                "legendFormat": "{{phase}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 28,
+                            "title": "Pod CPU Usage",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 64
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\"}[5m]))",
+                                "legendFormat": "{{pod}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "short"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 29,
+                            "title": "Pod Memory Usage",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 64
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\"})",
+                                "legendFormat": "{{pod}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "bytes"
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 30,
+                            "title": "Pod Restarts",
+                            "type": "table",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 24,
+                              "x": 0,
+                              "y": 71
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (namespace, pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"})",
+                                "instant": true,
+                                "format": "table",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "description": "Instant query, table format - cumulative restarts per pod."
+                          },
+                          {
+                            "id": 31,
+                            "type": "row",
+                            "title": "Node / Infrastructure",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 78
+                            }
+                          },
+                          {
+                            "id": 32,
+                            "title": "Node CPU Usage",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 79
+                            },
+                            "targets": [
+                              {
+                                "expr": "1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))",
+                                "legendFormat": "{{instance}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "percentunit",
+                                "min": 0,
+                                "max": 1
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 33,
+                            "title": "Node Memory Usage",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 79
+                            },
+                            "targets": [
+                              {
+                                "expr": "1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+                                "legendFormat": "{{instance}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "percentunit",
+                                "min": 0,
+                                "max": 1
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 34,
+                            "title": "Node Root Disk Usage",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 0,
+                              "y": 86
+                            },
+                            "targets": [
+                              {
+                                "expr": "1 - (node_filesystem_avail_bytes{mountpoint=\"/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes{mountpoint=\"/\", fstype!=\"tmpfs\"})",
+                                "legendFormat": "{{instance}} {{mountpoint}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "percentunit",
+                                "min": 0,
+                                "max": 1
+                              },
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 35,
+                            "title": "Node Network I/O",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 12,
+                              "x": 12,
+                              "y": 86
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (instance) (rate(node_network_receive_bytes_total{device=~\"(eth|ens)[0-9]+\"}[5m]))",
+                                "legendFormat": "{{instance}} rx",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              },
+                              {
+                                "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{device=~\"(eth|ens)[0-9]+\"}[5m]))",
+                                "legendFormat": "{{instance}} tx",
+                                "refId": "B",
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "unit": "Bps"
+                              },
+                              "overrides": []
+                            },
+                            "description": "Primary NICs only. Pod-side interfaces (veth*, eni* on EKS, azv* on AKS) and the accelerated-networking VF that mirrors eth0 on Azure would count the same bytes twice."
+                          },
+                          {
+                            "id": 36,
+                            "type": "row",
+                            "title": "Logs  \u00b7  Loki",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 93
+                            }
+                          },
+                          {
+                            "id": 37,
+                            "title": "Log Volume by Pod",
+                            "type": "timeseries",
+                            "datasource": {
+                              "type": "loki",
+                              "uid": "${DS_LOKI}"
+                            },
+                            "gridPos": {
+                              "h": 7,
+                              "w": 24,
+                              "x": 0,
+                              "y": 94
+                            },
+                            "targets": [
+                              {
+                                "expr": "sum by (pod) (count_over_time({namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+                                "legendFormat": "{{pod}}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "loki",
+                                  "uid": "${DS_LOKI}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            }
+                          },
+                          {
+                            "id": 38,
+                            "title": "Live Logs",
+                            "type": "logs",
+                            "datasource": {
+                              "type": "loki",
+                              "uid": "${DS_LOKI}"
+                            },
+                            "gridPos": {
+                              "h": 11,
+                              "w": 24,
+                              "x": 0,
+                              "y": 101
+                            },
+                            "targets": [
+                              {
+                                "expr": "{namespace=~\"$namespace\", pod=~\"$pod\"}",
+                                "refId": "A",
+                                "datasource": {
+                                  "type": "loki",
+                                  "uid": "${DS_LOKI}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "options": {
+                              "showTime": true,
+                              "wrapLogMessage": true,
+                              "sortOrder": "Descending",
+                              "enableLogDetails": true
+                            }
+                          }
+                        ]
+                      }
             prometheus:
               enabled: true
+              # Same nip.io approach as Grafana's ingress above.
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hosts:
+                  - prometheus.15.135.205.45.nip.io
+                paths:
+                  - /
               prometheusSpec:
+                # THE MOST IMPORTANT SETTING IN THIS FILE.
+                # By default this chart's Prometheus only watches
+                # ServiceMonitors carrying ITS OWN Helm release label
+                # (release=monitoring). Everything created by a different
+                # release - the Loki chart, the Alloy chart, and the
+                # ShopNest app chart - is then silently ignored: the
+                # ServiceMonitor exists, looks healthy, and is never
+                # scraped. Setting these to false makes Prometheus watch
+                # every ServiceMonitor/PodMonitor/PrometheusRule in every
+                # namespace regardless of who created it.
+                serviceMonitorSelectorNilUsesHelmValues: false
+                serviceMonitorNamespaceSelector: {}
+                podMonitorSelectorNilUsesHelmValues: false
+                podMonitorNamespaceSelector: {}
+                ruleSelectorNilUsesHelmValues: false
+                ruleNamespaceSelector: {}
+
+                # Previously unset, which made this pod BestEffort QoS -
+                # the first thing evicted or OOM-killed under node
+                # pressure. Losing Prometheus is losing the ability to
+                # see why anything else broke, so it gets a real
+                # reservation. Sized for a 2-node D2s_v7 cluster with
+                # ~1.2 vCPU spare, not a production fleet.
+                resources:
+                  requests:
+                    cpu: 150m
+                    memory: 512Mi
+                  limits:
+                    cpu: 750m
+                    memory: 1Gi
+
                 retention: 7d
                 storageSpec:
                   volumeClaimTemplate:
                     spec:
-                      storageClassName: gp2
                       accessModes:
                         - ReadWriteOnce
                       resources:
@@ -61,44 +1811,212 @@ applications:
             alertmanager:
               enabled: true
               alertmanagerSpec:
+                resources:
+                  requests:
+                    cpu: 25m
+                    memory: 100Mi
+                  limits:
+                    cpu: 100m
+                    memory: 200Mi
                 storage:
                   volumeClaimTemplate:
                     spec:
-                      storageClassName: gp2
                       accessModes:
                         - ReadWriteOnce
                       resources:
                         requests:
                           storage: 2Gi
-              # NOTE: put the real Slack webhook URL in a Secret instead of
-              # committing it in plaintext here.
+              # No Teams webhook on the AWS side (see the header): route
+              # everything to a receiver with no integrations. Swap in a
+              # real receiver, and mount its secret like the Azure file,
+              # to get notifications.
               config:
                 global: {}
                 route:
-                  receiver: "shopnest-slack"
+                  receiver: "null"
                   group_by: ["alertname", "severity"]
                   group_wait: 30s
                   group_interval: 5m
                   repeat_interval: 3h
-                  routes:
-                    - matchers:
-                        - severity = critical
-                      receiver: "shopnest-slack"
-                      repeat_interval: 1h
                 receivers:
-                  - name: "shopnest-slack"
-                    slack_configs:
-                      - api_url: "https://hooks.slack.com/services/REPLACE/WITH/YOUR-WEBHOOK"
-                        channel: "#shopnest-alerts"
-                        send_resolved: true
-                        title: '{{ .CommonAnnotations.summary }}'
-                        text: '{{ .CommonAnnotations.description }}'
+                  - name: "null"
 
             nodeExporter:
               enabled: true
 
+            # ------------------------------------------------------------
+            # EKS control plane: disabled because it CANNOT be scraped.
+            #
+            # etcd, the scheduler and the controller-manager run on the
+            # AWS-managed control plane that worker nodes have no network
+            # path to, and EKS's kube-proxy binds its metrics port to
+            # 127.0.0.1 on each node. Leaving them enabled ships four
+            # ServiceMonitors that discover nothing, four PrometheusRule
+            # groups whose alerts can never fire, and their Grafana
+            # dashboards - which is why the etcd dashboard renders every
+            # panel as "No data". That is not a broken dashboard; there is
+            # genuinely nothing on the other end of it.
+            #
+            # coreDns is deliberately NOT disabled: it runs as pods on the
+            # worker nodes and IS scraped.
+            #
+            # Cluster and node visibility is unaffected - it comes from
+            # kubelet/cAdvisor, the apiserver, kube-state-metrics and
+            # node-exporter, all of which remain enabled.
+            # ------------------------------------------------------------
+            kubeEtcd:
+              enabled: false
+            kubeScheduler:
+              enabled: false
+            kubeControllerManager:
+              enabled: false
+            kubeProxy:
+              enabled: false
+
             kubeStateMetrics:
               enabled: true
+
+            # Subchart-level resources. nodeExporter/kubeStateMetrics above
+            # are the enable flags; the resource blocks belong to the
+            # subcharts themselves, which is why they are keyed by the
+            # subchart name rather than nested under those toggles.
+            prometheus-node-exporter:
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+
+            kube-state-metrics:
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+
+            prometheusOperator:
+              # Webhook TLS from cert-manager instead of the chart's
+              # admission-create/patch Helm-hook Jobs. Under Argo CD those
+              # Jobs race their own delete policy ("Job ... is missing, it
+              # might have been deleted"), the PreSync phase fails, and the
+              # sync aborts before the Prometheus CR is ever applied.
+              admissionWebhooks:
+                certManager:
+                  enabled: true
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+
+            # ============================================================
+            # ShopNest alert rules.
+            #
+            # Deliberately few, and each one gated so it does not fire on
+            # normal noise - a single pod restart during a rollout, or one
+            # failed request, should not page anyone. These are the first
+            # rules in this cluster that are about ShopNest rather than
+            # about Kubernetes itself; every one of the 35 rules shipped by
+            # this chart describes the platform, not the application.
+            #
+            # BackendDown and PodCrashLooping read kube-state-metrics, which
+            # is already scraped, so they work immediately. The 5xx and
+            # latency rules read the application's own metrics and stay
+            # silent until the backend ServiceMonitor is syncing.
+            # ============================================================
+            additionalPrometheusRulesMap:
+              shopnest-rules:
+                groups:
+                  - name: shopnest.availability
+                    rules:
+                      - alert: ShopNestBackendDown
+                        expr: kube_deployment_status_replicas_available{namespace="shopnest", deployment="shopnest-backend"} < 1
+                        for: 2m
+                        labels:
+                          severity: critical
+                        annotations:
+                          summary: "ShopNest backend has no available replicas"
+                          description: >-
+                            The backend Deployment has had zero available
+                            replicas for 2 minutes. The API is down. Check
+                            `kubectl -n shopnest get pods,events`.
+
+                      - alert: ShopNestFrontendDown
+                        expr: kube_deployment_status_replicas_available{namespace="shopnest", deployment="shopnest-frontend"} < 1
+                        for: 2m
+                        labels:
+                          severity: critical
+                        annotations:
+                          summary: "ShopNest frontend has no available replicas"
+                          description: >-
+                            The frontend Deployment has had zero available
+                            replicas for 2 minutes. The site is unreachable.
+
+                      - alert: ShopNestPodCrashLooping
+                        expr: increase(kube_pod_container_status_restarts_total{namespace="shopnest"}[15m]) > 3
+                        for: 5m
+                        labels:
+                          severity: critical
+                        annotations:
+                          summary: "{{ $labels.pod }} is crash looping"
+                          description: >-
+                            {{ $labels.container }} in {{ $labels.pod }} has
+                            restarted {{ $value | printf "%.0f" }} times in 15
+                            minutes. Gated at >3 rather than >0 so a single
+                            expected restart during a rollout does not page.
+
+                  - name: shopnest.golden-signals
+                    rules:
+                      - alert: ShopNestHigh5xxRate
+                        expr: >-
+                          100 * sum(rate(shopnest_http_requests_total{status_code=~"5.."}[5m]))
+                          / clamp_min(sum(rate(shopnest_http_requests_total[5m])), 1e-9) > 5
+                        for: 5m
+                        labels:
+                          severity: warning
+                        annotations:
+                          summary: "ShopNest backend returning over 5% 5xx"
+                          description: >-
+                            5xx rate has been above 5% for 5 minutes
+                            ({{ $value | printf "%.1f" }}% now). clamp_min keeps
+                            the expression from dividing by zero at idle.
+
+                      - alert: ShopNestHighLatencyP95
+                        expr: >-
+                          histogram_quantile(0.95,
+                            sum(rate(shopnest_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+                        for: 5m
+                        labels:
+                          severity: warning
+                        annotations:
+                          summary: "ShopNest p95 latency above 1s"
+                          description: >-
+                            p95 request latency has been above 1 second for 5
+                            minutes ({{ $value | printf "%.2f" }}s now). A
+                            starting threshold for a dev-sized cluster, to be
+                            tuned once real traffic patterns are known.
+
+                  - name: shopnest.business
+                    rules:
+                      - alert: ShopNestPaymentVerificationFailing
+                        expr: >-
+                          sum(rate(shopnest_payment_verification_failures_total[10m]))
+                          > sum(rate(shopnest_payment_verification_success_total[10m]))
+                        for: 10m
+                        labels:
+                          severity: warning
+                        annotations:
+                          summary: "ShopNest payment verification failing more than succeeding"
+                          description: >-
+                            Failed payment verifications have outnumbered
+                            successful ones for 10 minutes. Likely a Razorpay
+                            signature/secret problem rather than a pod problem.
 
       - chart: loki
         repoURL: https://grafana.github.io/helm-charts
@@ -126,9 +2044,15 @@ applications:
 
             singleBinary:
               replicas: 1
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
               persistence:
                 enabled: true
-                storageClass: gp2
                 size: 10Gi
 
             chunksCache:
@@ -146,14 +2070,27 @@ applications:
 
             gateway:
               enabled: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
 
             monitoring:
               serviceMonitor:
                 enabled: true
               selfMonitoring:
                 enabled: false
-              lokiCanary:
-                enabled: false
+
+            # lokiCanary moved OUT of `monitoring:` - it is a top-level key in
+            # loki chart 6.52.0 (values.yaml line 780) and defaults to true.
+            # Nested under monitoring it was silently ignored, which is why two
+            # loki-canary pods have been running on a 2-node cluster that has
+            # no use for them.
+            lokiCanary:
+              enabled: false
 
             test:
               enabled: false
@@ -167,8 +2104,17 @@ applications:
             alloy:
               configMap:
                 content: |-
+                  // Alloy runs as a DaemonSet, so without this selector every
+                  // Alloy pod discovered and tailed EVERY pod in the cluster -
+                  // each log line was shipped once per node. Each instance now
+                  // only takes the pods scheduled on its own node (the chart
+                  // sets K8S_NODE_NAME from spec.nodeName).
                   discovery.kubernetes "pods" {
                     role = "pod"
+                    selectors {
+                      role  = "pod"
+                      field = "spec.nodeName=" + sys.env("K8S_NODE_NAME")
+                    }
                   }
 
                   discovery.relabel "pods" {
@@ -188,6 +2134,11 @@ applications:
                       source_labels = ["__meta_kubernetes_pod_container_name"]
                       target_label  = "container"
                     }
+
+                    rule {
+                      source_labels = ["__meta_kubernetes_pod_node_name"]
+                      target_label  = "node"
+                    }
                   }
 
                   loki.source.kubernetes "pods" {
@@ -201,6 +2152,20 @@ applications:
                     }
                   }
 
+              # NOTE the nesting: this chart reads container resources from
+              # alloy.resources, NOT a top-level `resources:` key. Placed at
+              # the top level it is silently ignored - the chart renders
+              # fine, the DaemonSet comes up, and the containers simply have
+              # no requests. Verified against `helm template grafana/alloy`
+              # before committing.
+              resources:
+                requests:
+                  cpu: 30m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+
             controller:
               type: daemonset
 
@@ -211,6 +2176,21 @@ applications:
       server: https://kubernetes.default.svc
       namespace: monitoring
     syncPolicy:
+      # Same as the shopnest app: Argo CD reconciles whatever Git says, with
+      # no manual sync after a rebuild. The first-sync failures seen before
+      # (client-side apply on the large Prometheus CRDs, the admission-webhook
+      # hook Jobs) are fixed by ServerSideApply and certManager above; retry
+      # covers the ordering races left on a fresh cluster, e.g. CRDs not yet
+      # established when the Prometheus CR is applied.
+      automated:
+        selfHeal: true
+        prune: true
+      retry:
+        limit: 5
+        backoff:
+          duration: 30s
+          factor: 2
+          maxDuration: 5m
       syncOptions:
         - CreateNamespace=true
         - ServerSideApply=true

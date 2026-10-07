@@ -40,7 +40,7 @@ inputs = {
   private_subnet_ids        = dependency.networking.outputs.private_subnet_ids
   cluster_security_group_id = dependency.networking.outputs.cluster_security_group_id
 
-  kubernetes_version = "1.31"
+  kubernetes_version = "1.35"
   instance_type      = "m6i.large"
 
   enable_auto_scaling = true

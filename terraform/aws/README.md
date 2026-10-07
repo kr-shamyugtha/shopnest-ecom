@@ -12,11 +12,27 @@ terraform/aws/
   bootstrap/            S3 state bucket (run once, by hand)
   modules/              The reusable pieces
   live/                 One directory per environment/region/component
-    shared/eu-central-1/    resource-group, ci-oidc, ecr
-    dev/eu-central-1/       10 units
-    staging/eu-west-1/      10 units
-    prod/us-east-1/         10 units
+    shared/ap-southeast-2/  resource-group, ci-identity, ecr
+    dev/ap-southeast-2/     12 units
+    staging/eu-west-1/      10 units (not deployable on the Free plan, see below)
+    prod/us-east-1/         10 units (not deployable on the Free plan, see below)
 ```
+
+## Running on the AWS Free plan
+
+The account this is deployed to is on the AWS **Free plan** (a "project"
+account inside an AWS-managed organization). Its service control policy
+shapes the code in three ways:
+
+| Free plan restriction | What the code does instead |
+|---|---|
+| Only **`ap-southeast-2`** is allowed; every other region is denied. | `shared` and `dev` live in `ap-southeast-2`, and so does the state bucket. `staging`/`prod` keep their original regions and can't be applied in this account. |
+| **`iam:*OpenIDConnectProvider*` is denied**, so neither IRSA nor GitHub OIDC federation can exist. | Pods get AWS roles through **EKS Pod Identity** (a managed agent plus `aws_eks_pod_identity_association`), which needs no OIDC provider. GitHub Actions signs in as the narrowly-scoped **`shopnest-ci` IAM user** (`ci-identity`), with its key in repository secrets. |
+| Spend comes out of a fixed credit balance. | Kubernetes **1.35** (in standard support; 1.31 would bill at the extended-support rate, 6x the control-plane price), one NAT gateway, two t3.large nodes. Roughly $10/day for `dev`; `terragrunt run --all destroy` in `dev` when it isn't needed. |
+
+EKS itself is allowed. The services a Free plan account cannot use
+(Marketplace, Reserved Instances, Savings Plans and similar) aren't part of
+this stack.
 
 ## How the two clouds line up
 
@@ -28,9 +44,12 @@ terraform/aws/
 | ACR (one registry, many repos) | ECR (one repo per image) | No registry object, so the "registry" is a name prefix. No admin credential to disable — ECR is IAM-only. Needs explicit lifecycle policies; ECR has no storage cap. |
 | Key Vault | Secrets Manager | No vault object; the "vault" is the path prefix `shopnest/<env>/`. |
 | AKS | EKS | See below — this is where most of the extra work is. |
-| Managed identity + federated credential | IAM role + IRSA trust policy | Same statement, different syntax. The pod-level `azure.workload.identity/use` label has no AWS counterpart. |
-| `admin_group_object_ids` (Entra group) | `admin_principal_arns` (IAM role ARNs) | EKS access entries take a role/user ARN, not a group. An IAM Identity Center permission set is the closest equivalent to the Entra group. |
-| ADO service connection (auto-provisioned SP) | `ci-oidc` module | Nothing auto-provisions this on AWS, so the GitHub OIDC trust is declared in Terraform instead of pasted in as a GUID. |
+| Managed identity + federated credential | IAM role + EKS Pod Identity association | The federated credential's subject (this service account, this namespace, this cluster) becomes the association. IRSA would be the usual choice, but the Free plan denies the OIDC provider it needs. The pod-level `azure.workload.identity/use` label is only rendered on Azure. |
+| `admin_group_object_ids` (Entra group) | `admin_principal_arns` (IAM role/user ARNs) | EKS access entries take a role/user ARN, not a group. With no IAM Identity Center on the Free plan, `dev` names the admin IAM user directly. |
+| ADO service connection (auto-provisioned SP) | `ci-identity` module | An IAM user limited to ECR push and reading the backend role's ARN. A GitHub OIDC role would avoid the long-lived key, but the Free plan denies the OIDC provider. |
+| `argocd` unit | `argocd` unit | Same bootstrap: Argo CD, the Grafana admin secret (kept in Secrets Manager instead of Key Vault), and the `argocd-apps` chart. No repo credential, because the GitHub repo is public. |
+| `cert-manager-issuers` unit | `cert-manager-issuers` unit | The same self-signed and Let's Encrypt ClusterIssuers, applied after cert-manager so the CRD exists at plan time. |
+| Static public IP on the AKS LoadBalancer | Elastic IPs pinned to the NLB (`ingress-nginx`) | Gives `argocd.`/`grafana.`/`prometheus.<ip>.nip.io` hostnames that survive an NLB rebuild, the same way the Azure ones rely on the static IP. |
 | Azure Storage + blob leases | S3 + `use_lockfile` | Native S3 conditional-write locking, so no DynamoDB table to keep in sync. |
 | `CanNotDelete` management lock | per-resource protection | AWS has no lock that cascades over a whole group. `enable_delete_lock` is threaded down to the resources that *do* support it (ECR `force_delete`, Secrets Manager recovery windows, KMS deletion windows, the state bucket's `prevent_destroy`). |
 
@@ -50,55 +69,56 @@ quietly stop working:
 
 ## Apply order
 
-Bootstrap once per account:
+The state bucket is `shopnest-tfstate-<account id>` in `ap-southeast-2`
+(`live/terragrunt.hcl` derives the name from the account). In the current
+account it was created by hand with versioning, AES256 encryption and public
+access blocked; `bootstrap/` creates the same thing in a new account:
 
 ```bash
 cd terraform/aws/bootstrap
 terraform init
-terraform apply -var 'state_bucket_name=shopnest-tfstate-2026'
+terraform apply -var "state_bucket_name=shopnest-tfstate-$(aws sts get-caller-identity --query Account --output text)" -var region=ap-southeast-2
 ```
 
-Then, per environment — Terragrunt resolves the ordering from the
-`dependency` blocks, so a whole environment can go in one command:
+Then `shared` before `dev` — `dev/eks` reads the CI user's ARN from
+`shared/ci-identity`, and the pipeline needs ECR before it can push.
+Terragrunt resolves the order inside each environment:
 
 ```bash
-cd terraform/aws/live/shared/eu-central-1 && terragrunt run --all apply
-cd ../../dev/eu-central-1                 && terragrunt run --all apply
+export TF_PLUGIN_CACHE_DIR=/tmp/tfplugins   # one provider copy, not one per unit
+mkdir -p $TF_PLUGIN_CACHE_DIR
+cd terraform/aws/live/shared/ap-southeast-2 && terragrunt run --all apply
+cd ../../dev/ap-southeast-2                 && terragrunt run --all apply
 ```
 
-`shared` must come first: `dev/eks` reads the CI role ARN from
-`shared/ci-oidc`, and the pipeline needs ECR to exist before it can push.
+A unit can't be *planned* until the units it depends on have been applied
+(their outputs don't exist yet), so a first-time rollout goes in waves:
+networking, then eks, then the add-ons, then secrets-manager /
+cert-manager-issuers / argocd.
 
-## Things that must be filled in before a real apply
+## After the first apply
 
-Everything below ships with an obvious placeholder rather than a wrong
-value, so a mistake fails loudly instead of silently targeting the wrong
-account.
-
-1. **State bucket name** — `live/terragrunt.hcl` `remote_state.config.bucket`
-   must match what `bootstrap` created (S3 names are globally unique).
-2. **Admin IAM role** — `shopnest-eks-admins` (dev/staging) and
-   `shopnest-eks-admins-prod` must exist and be assumable by the humans who
-   need cluster-admin. The account ID is resolved live via
-   `get_aws_account_id()`, so there is no account number to keep in sync —
-   but it does mean these units need valid credentials even to *render*.
-3. **GitHub repository** — `shared/ci-oidc` pins `github_repository`. Only
-   that repo, on `refs/heads/main`, can assume the CI role.
-4. **`AWS_CI_ROLE_ARN`** — set as a **repository variable** in GitHub from
-   the `ci-oidc` unit's `role_arn` output. `SONAR_TOKEN` stays a secret.
-5. **Secret values** — Terraform creates the Secrets Manager entries but
-   deliberately never their values (that would put them in state). Seed each
-   one once:
+1. **CI key** — create it outside Terraform so the secret never lands in
+   state, and store it as the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+   repository secrets. `SONAR_TOKEN` is the only other secret.
+   ```bash
+   aws iam create-access-key --user-name shopnest-ci
+   ```
+2. **Secret values** — Terraform creates the Secrets Manager entries but
+   deliberately never their values (that would put them in state). Seed them
+   from the backend's `.env`, which uses the same names with `_` for `-`:
    ```bash
    aws secretsmanager put-secret-value \
      --secret-id shopnest/dev/MONGO-URI --secret-string '...'
    ```
-6. **Image repository host** — `helm/shopnest/values-aws.yaml` ships a
-   placeholder account ID. The pipeline overwrites it in the per-environment
-   file on every run; set it by hand only for a manual `helm install`.
-7. **`public_access_cidrs`** — the EKS API endpoint defaults to `0.0.0.0/0`
-   (IAM-authenticated, but reachable). Narrow it to the CI and office/VPN
-   ranges once they are known.
+3. **Hostnames** — `argocd/install-values-aws.yaml` and
+   `argocd/values-monitoring-aws.yaml` need the NLB's Elastic IP in their
+   nip.io hostnames (`terragrunt output public_ips` in `dev/.../ingress-nginx`).
+4. **MongoDB Atlas** — allow the NAT gateway's Elastic IP, which is where
+   all pod egress leaves the VPC.
+5. **`public_access_cidrs`** — the EKS API endpoint defaults to `0.0.0.0/0`
+   (IAM-authenticated, but reachable). Narrow it once the CI and admin
+   ranges are known.
 
 ## Deliberate deviations from the Azure stack
 

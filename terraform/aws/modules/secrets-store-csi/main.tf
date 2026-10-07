@@ -38,6 +38,16 @@ resource "helm_release" "csi_driver" {
     name  = "syncSecret.enabled"
     value = "true"
   }
+
+  # The AWS provider authenticates as the mounting pod using a service
+  # account token the driver requests on its behalf. Pod Identity (used
+  # instead of IRSA, see the eks module) only accepts tokens minted for the
+  # pods.eks.amazonaws.com audience; without this the provider gets no
+  # credentials and the backend mount fails.
+  set {
+    name  = "tokenRequests[0].audience"
+    value = "pods.eks.amazonaws.com"
+  }
 }
 
 resource "helm_release" "aws_provider" {

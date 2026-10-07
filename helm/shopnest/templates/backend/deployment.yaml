@@ -31,7 +31,9 @@ spec:
       labels:
         {{- include "shopnest.selectorLabels" (dict "component" "backend") | nindent 8 }}
         {{- include "shopnest.labels" (dict "component" "backend") | nindent 8 }}
+        {{- if eq .Values.cloud.provider "azure" }}
         azure.workload.identity/use: "true"
+        {{- end }}
       annotations:
         checksum/config: {{ include (printf "%s/configmap.yaml" (dir .Template.Name)) . | sha256sum }}
 

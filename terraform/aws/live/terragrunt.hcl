@@ -17,9 +17,11 @@ remote_state {
     if_exists = "overwrite"
   }
   config = {
-    bucket  = "shopnest-tfstate-2026"
+    # One bucket per account (S3 names are global), in the only region the
+    # AWS Free plan project allows.
+    bucket  = "shopnest-tfstate-${get_aws_account_id()}"
     key     = "${path_relative_to_include()}.tfstate"
-    region  = "eu-central-1"
+    region  = "ap-southeast-2"
     encrypt = true
 
     # S3 native conditional-write locking, the counterpart to the blob
@@ -72,6 +74,11 @@ terraform {
     tls = {
       source  = "hashicorp/tls"
       version = "~> 4.0"
+    }
+    # Only the argocd unit uses this (the generated Grafana admin password).
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
     }
   }
 }

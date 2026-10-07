@@ -23,14 +23,33 @@ app.use(cors({
 
 app.use(express.json());
 
+// Endpoints that exist for the platform, not for users. Kubernetes probes
+// /health every few seconds and Prometheus scrapes /metrics every 15s; counted
+// as traffic they added ~0.2 req/s per pod with nobody on the site, inflating
+// the request rate, diluting the error percentage, and (since every /metrics
+// call runs three Atlas queries) dominating the latency percentiles.
+const UNMETERED_PATHS = new Set(['/health', '/metrics']);
+
 app.use((req, res, next) => {
+  if (UNMETERED_PATHS.has(req.path)) {
+    return next();
+  }
+
   const start = process.hrtime();
 
   res.on('finish', () => {
     const diff = process.hrtime(start);
     const durationSeconds = diff[0] + diff[1] / 1e9;
 
-    const route = req.route?.path || req.path;
+    // The route TEMPLATE, mount prefix included. req.route.path alone is the
+    // path inside the sub-router, so /api/products, /api/orders and every
+    // other router's index all reported as "/" and were merged on the
+    // dashboard. Requests that matched no route are grouped as "unmatched"
+    // rather than labelled with their raw path, so scanners probing random
+    // URLs can't create a new series per URL.
+    const route = req.route
+      ? (`${req.baseUrl}${req.route.path}`.replace(/\/$/, '') || '/')
+      : 'unmatched';
 
     httpRequestsTotal.inc({
       method: req.method,

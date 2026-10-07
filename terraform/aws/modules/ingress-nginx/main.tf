@@ -1,3 +1,27 @@
+# ---------------------------------------------------------------
+# Fixed public IPs
+# ---------------------------------------------------------------
+# The Azure dev environment reaches Argo CD, Grafana and the app through
+# nip.io hostnames on ingress-nginx's static public IP. An NLB's addresses
+# are only stable for the lifetime of that NLB, so the same trick on AWS
+# would break on every reinstall. Pinning one Elastic IP per public subnet
+# gives the NLB addresses that outlive it — the hostnames in the Argo CD and
+# monitoring values stay valid across rebuilds, like the Azure static IP.
+locals {
+  # Units that don't pass their public subnets (staging/prod) keep the
+  # controller's own subnet discovery and NLB-assigned addresses.
+  pin_ips = var.internet_facing && length(var.public_subnet_ids) > 0
+}
+
+resource "aws_eip" "nlb" {
+  count  = local.pin_ips ? length(var.public_subnet_ids) : 0
+  domain = "vpc"
+
+  tags = merge(var.tags, {
+    Name = "ingress-nginx-nlb-${count.index}"
+  })
+}
+
 resource "helm_release" "ingress_nginx" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -65,10 +89,29 @@ resource "helm_release" "ingress_nginx" {
 
   # Cross-zone is off by default on an NLB and is not free, but with a
   # single ingress-nginx replica every zone without that pod blackholes
-  # traffic otherwise.
+  # traffic otherwise. (The older cross-zone-load-balancing-enabled
+  # annotation is the in-tree provider's; this is the controller's form.)
   set {
-    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-cross-zone-load-balancing-enabled"
-    value = "true"
+    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-attributes"
+    value = "load_balancing.cross_zone.enabled=true"
+  }
+
+  # One EIP per subnet, in the same order as the subnets — the controller
+  # pairs them positionally. Commas inside a `set` value must be escaped.
+  dynamic "set" {
+    for_each = local.pin_ips ? [1] : []
+    content {
+      name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-subnets"
+      value = join("\\,", var.public_subnet_ids)
+    }
+  }
+
+  dynamic "set" {
+    for_each = local.pin_ips ? [1] : []
+    content {
+      name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-eip-allocations"
+      value = join("\\,", aws_eip.nlb[*].allocation_id)
+    }
   }
 
   set {

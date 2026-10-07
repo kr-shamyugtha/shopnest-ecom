@@ -14,9 +14,9 @@ applications:
       - resources-finalizer.argocd.argoproj.io
     project: shopnest
     sources:
-      # The GitHub repo the AWS pipeline pushes its GitOps commits to. If
-      # the repo is private, Argo CD needs repo credentials configured
-      # separately from this values file — same as the Azure Repos setup.
+      # The GitHub repo the AWS pipeline pushes its GitOps commits to. It is
+      # public, so unlike the Azure Repos setup no repo credential is needed;
+      # if it is ever made private, add one in terraform/aws/modules/argocd.
       - repoURL: https://github.com/kr-shamyugtha/shopnest-ecom.git
         path: helm/shopnest
         targetRevision: HEAD
@@ -28,13 +28,21 @@ applications:
     destination:
       server: https://kubernetes.default.svc
       # Must match where the app actually runs — every other piece (CI, the
-      # IRSA role's trust condition, the NetworkPolicies) already assumes
-      # the "shopnest" namespace.
+      # backend's Pod Identity association, the NetworkPolicies) already
+      # assumes the "shopnest" namespace.
       namespace: shopnest
     syncPolicy:
       automated:
         selfHeal: true
         prune: true
+      # Retry covers the fresh-cluster race where the app syncs before the
+      # monitoring stack has installed the ServiceMonitor CRD.
+      retry:
+        limit: 5
+        backoff:
+          duration: 30s
+          factor: 2
+          maxDuration: 5m
       syncOptions:
         - CreateNamespace=true
 
@@ -80,3 +88,8 @@ projects:
         kind: Ingress
       - group: "secrets-store.csi.x-k8s.io"
         kind: SecretProviderClass
+      # Same as the Azure project: without it the Application fails with
+      # "resource monitoring.coreos.com:ServiceMonitor is not permitted in
+      # project shopnest" and the backend is never scraped.
+      - group: "monitoring.coreos.com"
+        kind: ServiceMonitor

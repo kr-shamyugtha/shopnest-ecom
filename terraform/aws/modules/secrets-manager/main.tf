@@ -38,7 +38,7 @@ resource "aws_secretsmanager_secret" "this" {
   for_each = local.secrets
 
   name        = each.value
-  description = "ShopNest ${var.environment} — ${each.key}"
+  description = "ShopNest ${var.environment} - ${each.key}"
   kms_key_id  = aws_kms_key.this.arn
 
   # Key Vault's soft_delete_retention_days = 7, expressed per-secret.

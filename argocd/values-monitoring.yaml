@@ -173,7 +173,8 @@ applications:
                               "current": {
                                 "text": "shopnest",
                                 "value": "shopnest"
-                              }
+                              },
+                              "allValue": ".*"
                             },
                             {
                               "name": "pod",
@@ -191,7 +192,8 @@ applications:
                               "current": {
                                 "text": "All",
                                 "value": "$__all"
-                              }
+                              },
+                              "allValue": ".*"
                             },
                             {
                               "name": "route",
@@ -200,7 +202,7 @@ applications:
                                 "type": "prometheus",
                                 "uid": "${DS_PROMETHEUS}"
                               },
-                              "query": "label_values(shopnest_http_requests_total, route)",
+                              "query": "label_values(shopnest_http_requests_total{job=\"backend\"}, route)",
                               "label": "Route",
                               "refresh": 2,
                               "includeAll": true,
@@ -209,11 +211,228 @@ applications:
                               "current": {
                                 "text": "All",
                                 "value": "$__all"
-                              }
+                              },
+                              "allValue": ".*"
                             }
                           ]
                         },
                         "panels": [
+                          {
+                            "id": 41,
+                            "type": "row",
+                            "title": "Data health",
+                            "collapsed": false,
+                            "gridPos": {
+                              "h": 1,
+                              "w": 24,
+                              "x": 0,
+                              "y": 0
+                            },
+                            "panels": []
+                          },
+                          {
+                            "id": 42,
+                            "type": "stat",
+                            "title": "Backend scrape targets up",
+                            "description": "Backend pods Prometheus is successfully scraping. 0 or DOWN means every HTTP panel below is empty because nothing is being collected, not because there is no traffic.",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 4,
+                              "w": 8,
+                              "x": 0,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "sum(up{job=\"backend\"})",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "mappings": [],
+                                "noValue": "DOWN",
+                                "color": {
+                                  "mode": "thresholds"
+                                },
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "red",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "green",
+                                      "value": 1
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "colorMode": "background",
+                              "graphMode": "none",
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "value"
+                            }
+                          },
+                          {
+                            "id": 43,
+                            "type": "stat",
+                            "title": "Atlas-backed metrics",
+                            "description": "OK when the last scrape refreshed every MongoDB-backed gauge (orders, statuses, payment attempts). STALE means a query failed and those panels are showing the last good value.",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 4,
+                              "w": 8,
+                              "x": 8,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "min(shopnest_db_metrics_up)",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "mappings": [
+                                  {
+                                    "type": "value",
+                                    "options": {
+                                      "0": {
+                                        "text": "STALE",
+                                        "color": "red"
+                                      },
+                                      "1": {
+                                        "text": "OK",
+                                        "color": "green"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "noValue": "DOWN",
+                                "color": {
+                                  "mode": "thresholds"
+                                },
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "red",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "green",
+                                      "value": 1
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "colorMode": "background",
+                              "graphMode": "none",
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "value"
+                            }
+                          },
+                          {
+                            "id": 44,
+                            "type": "stat",
+                            "title": "Unmatched API requests (in range)",
+                            "description": "Requests that matched no route (404s from scanners, typos, stale links). Grouped into one series so they cannot create a label per URL.",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 4,
+                              "w": 8,
+                              "x": 16,
+                              "y": 1
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "round(sum(increase(shopnest_http_requests_total{job=\"backend\", route=\"unmatched\"}[$__range])) or vector(0))",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "mappings": [],
+                                "noValue": "0",
+                                "color": {
+                                  "mode": "thresholds"
+                                },
+                                "thresholds": {
+                                  "mode": "absolute",
+                                  "steps": [
+                                    {
+                                      "color": "green",
+                                      "value": null
+                                    },
+                                    {
+                                      "color": "orange",
+                                      "value": 50
+                                    }
+                                  ]
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "options": {
+                              "colorMode": "background",
+                              "graphMode": "none",
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "textMode": "value"
+                            }
+                          },
                           {
                             "id": 1,
                             "type": "row",
@@ -223,7 +442,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 0
+                              "y": 5
                             }
                           },
                           {
@@ -238,7 +457,7 @@ applications:
                               "h": 5,
                               "w": 4,
                               "x": 0,
-                              "y": 1
+                              "y": 6
                             },
                             "targets": [
                               {
@@ -269,7 +488,7 @@ applications:
                               "h": 5,
                               "w": 4,
                               "x": 4,
-                              "y": 1
+                              "y": 6
                             },
                             "targets": [
                               {
@@ -305,7 +524,7 @@ applications:
                               "h": 5,
                               "w": 4,
                               "x": 8,
-                              "y": 1
+                              "y": 6
                             },
                             "targets": [
                               {
@@ -340,7 +559,7 @@ applications:
                               "h": 5,
                               "w": 4,
                               "x": 12,
-                              "y": 1
+                              "y": 6
                             },
                             "targets": [
                               {
@@ -375,7 +594,7 @@ applications:
                               "h": 5,
                               "w": 4,
                               "x": 16,
-                              "y": 1
+                              "y": 6
                             },
                             "targets": [
                               {
@@ -401,7 +620,7 @@ applications:
                           },
                           {
                             "id": 6,
-                            "title": "Created since restart",
+                            "title": "Orders Created (in range)",
                             "type": "stat",
                             "datasource": {
                               "type": "prometheus",
@@ -411,17 +630,19 @@ applications:
                               "h": 5,
                               "w": 4,
                               "x": 20,
-                              "y": 1
+                              "y": 6
                             },
                             "targets": [
                               {
-                                "expr": "sum(shopnest_orders_created_total)",
+                                "expr": "round(sum(increase(shopnest_orders_created_total[$__range])) or vector(0))",
                                 "legendFormat": "created",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                }
+                                },
+                                "instant": true,
+                                "range": false
                               }
                             ],
                             "fieldConfig": {
@@ -433,7 +654,7 @@ applications:
                               },
                               "overrides": []
                             },
-                            "description": "Counter, in-process: resets to 0 when the pod restarts. Use 'Total Orders (Atlas)' for the authoritative figure."
+                            "description": "Orders saved during the selected time range. Uses increase() over the range, so it is unaffected by pod restarts (a raw counter resets to 0 on every rollout)."
                           },
                           {
                             "id": 40,
@@ -447,7 +668,7 @@ applications:
                               "h": 6,
                               "w": 12,
                               "x": 0,
-                              "y": 6
+                              "y": 11
                             },
                             "targets": [
                               {
@@ -487,7 +708,7 @@ applications:
                               "h": 6,
                               "w": 12,
                               "x": 12,
-                              "y": 6
+                              "y": 11
                             },
                             "targets": [
                               {
@@ -517,7 +738,7 @@ applications:
                               "h": 6,
                               "w": 24,
                               "x": 0,
-                              "y": 12
+                              "y": 17
                             },
                             "targets": [
                               {
@@ -554,7 +775,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 18
+                              "y": 23
                             }
                           },
                           {
@@ -569,7 +790,7 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 0,
-                              "y": 19
+                              "y": 24
                             },
                             "targets": [
                               {
@@ -590,7 +811,7 @@ applications:
                           },
                           {
                             "id": 11,
-                            "title": "Verification Successes",
+                            "title": "Verification Successes (in range)",
                             "type": "stat",
                             "datasource": {
                               "type": "prometheus",
@@ -600,17 +821,19 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 6,
-                              "y": 19
+                              "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "sum(shopnest_payment_verification_success_total)",
+                                "expr": "round(sum(increase(shopnest_payment_verification_success_total[$__range])) or vector(0))",
                                 "legendFormat": "success",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                }
+                                },
+                                "instant": true,
+                                "range": false
                               }
                             ],
                             "fieldConfig": {
@@ -625,7 +848,7 @@ applications:
                           },
                           {
                             "id": 12,
-                            "title": "Verification Failures",
+                            "title": "Verification Failures (in range)",
                             "type": "stat",
                             "datasource": {
                               "type": "prometheus",
@@ -635,17 +858,19 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 12,
-                              "y": 19
+                              "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "sum(shopnest_payment_verification_failures_total)",
+                                "expr": "round(sum(increase(shopnest_payment_verification_failures_total[$__range])) or vector(0))",
                                 "legendFormat": "failures",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                }
+                                },
+                                "instant": true,
+                                "range": false
                               }
                             ],
                             "fieldConfig": {
@@ -660,7 +885,7 @@ applications:
                           },
                           {
                             "id": 13,
-                            "title": "Payment Success Rate",
+                            "title": "Payment Success Rate (in range)",
                             "type": "gauge",
                             "datasource": {
                               "type": "prometheus",
@@ -670,17 +895,19 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 18,
-                              "y": 19
+                              "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "sum(shopnest_payment_verification_success_total) / clamp_min(sum(shopnest_payment_verification_success_total) + sum(shopnest_payment_verification_failures_total), 1)",
+                                "expr": "sum(increase(shopnest_payment_verification_success_total[$__range])) / (sum(increase(shopnest_payment_verification_success_total[$__range])) + sum(increase(shopnest_payment_verification_failures_total[$__range])) > 0)",
                                 "legendFormat": "success rate",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                }
+                                },
+                                "instant": true,
+                                "range": false
                               }
                             ],
                             "fieldConfig": {
@@ -704,11 +931,12 @@ applications:
                                       "value": 0.95
                                     }
                                   ]
-                                }
+                                },
+                                "noValue": "No payments"
                               },
                               "overrides": []
                             },
-                            "description": "clamp_min(...,1) keeps this at 0 rather than NaN before any payment has been verified."
+                            "description": "Successful / all verifications in the selected range. Shows \"No payments\" rather than 0% when there were none, so an idle shop does not read as a failing one."
                           },
                           {
                             "id": 14,
@@ -722,7 +950,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 24
+                              "y": 29
                             },
                             "targets": [
                               {
@@ -761,7 +989,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 24
+                              "y": 29
                             },
                             "targets": [
                               {
@@ -789,7 +1017,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 31
+                              "y": 36
                             }
                           },
                           {
@@ -804,11 +1032,11 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 0,
-                              "y": 32
+                              "y": 37
                             },
                             "targets": [
                               {
-                                "expr": "sum(rate(shopnest_http_requests_total{route=~\"$route\"}[5m]))",
+                                "expr": "sum(rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[5m])) or vector(0)",
                                 "legendFormat": "req/s",
                                 "refId": "A",
                                 "datasource": {
@@ -848,11 +1076,11 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 6,
-                              "y": 32
+                              "y": 37
                             },
                             "targets": [
                               {
-                                "expr": "(sum(rate(shopnest_http_requests_total{status_code=~\"5..\", route=~\"$route\"}[5m])) or vector(0)) / clamp_min(sum(rate(shopnest_http_requests_total{route=~\"$route\"}[5m])), 0.001)",
+                                "expr": "(sum(rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\", status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[5m])), 1e-9)",
                                 "legendFormat": "5xx",
                                 "refId": "A",
                                 "datasource": {
@@ -884,7 +1112,7 @@ applications:
                               },
                               "overrides": []
                             },
-                            "description": "`or vector(0)` matters: with no 5xx series in range, sum(rate(...)) returns NO SAMPLES rather than zero, so the panel would read 'No data' precisely when the service is healthy. vector(0) makes the healthy case render as 0%."
+                            "description": "Share of API requests answered with 5xx over the last 5m. 4xx are client errors and are deliberately excluded. Health probes and metric scrapes are not counted (the backend does not meter them)."
                           },
                           {
                             "id": 19,
@@ -898,11 +1126,11 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 12,
-                              "y": 32
+                              "y": 37
                             },
                             "targets": [
                               {
-                                "expr": "histogram_quantile(0.95, sum(rate(shopnest_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])) by (le))",
+                                "expr": "histogram_quantile(0.95, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
                                 "legendFormat": "p95",
                                 "refId": "A",
                                 "datasource": {
@@ -930,11 +1158,11 @@ applications:
                               "h": 5,
                               "w": 6,
                               "x": 18,
-                              "y": 32
+                              "y": 37
                             },
                             "targets": [
                               {
-                                "expr": "histogram_quantile(0.99, sum(rate(shopnest_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])) by (le))",
+                                "expr": "histogram_quantile(0.99, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
                                 "legendFormat": "p99",
                                 "refId": "A",
                                 "datasource": {
@@ -962,11 +1190,11 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 37
+                              "y": 42
                             },
                             "targets": [
                               {
-                                "expr": "sum by (route) (rate(shopnest_http_requests_total{route=~\"$route\"}[5m]))",
+                                "expr": "sum by (route) (rate(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[5m]))",
                                 "legendFormat": "{{route}}",
                                 "refId": "A",
                                 "datasource": {
@@ -994,11 +1222,11 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 37
+                              "y": 42
                             },
                             "targets": [
                               {
-                                "expr": "histogram_quantile(0.50, sum(rate(shopnest_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])) by (le))",
+                                "expr": "histogram_quantile(0.50, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
                                 "legendFormat": "p50",
                                 "refId": "A",
                                 "datasource": {
@@ -1007,7 +1235,7 @@ applications:
                                 }
                               },
                               {
-                                "expr": "histogram_quantile(0.95, sum(rate(shopnest_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])) by (le))",
+                                "expr": "histogram_quantile(0.95, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
                                 "legendFormat": "p95",
                                 "refId": "B",
                                 "datasource": {
@@ -1016,7 +1244,7 @@ applications:
                                 }
                               },
                               {
-                                "expr": "histogram_quantile(0.99, sum(rate(shopnest_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])) by (le))",
+                                "expr": "histogram_quantile(0.99, sum by (le) (rate(shopnest_http_request_duration_seconds_bucket{job=\"backend\", route=~\"$route\"}[5m])))",
                                 "legendFormat": "p99",
                                 "refId": "C",
                                 "datasource": {
@@ -1034,7 +1262,7 @@ applications:
                           },
                           {
                             "id": 23,
-                            "title": "Requests by Status Code (1h)",
+                            "title": "Requests by Status Code (in range)",
                             "type": "piechart",
                             "datasource": {
                               "type": "prometheus",
@@ -1044,17 +1272,19 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 44
+                              "y": 49
                             },
                             "targets": [
                               {
-                                "expr": "sum by (status_code) (increase(shopnest_http_requests_total{route=~\"$route\"}[1h]))",
+                                "expr": "sum by (status_code) (increase(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[$__range]))",
                                 "legendFormat": "{{status_code}}",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                }
+                                },
+                                "instant": true,
+                                "range": false
                               }
                             ],
                             "fieldConfig": {
@@ -1064,7 +1294,7 @@ applications:
                           },
                           {
                             "id": 24,
-                            "title": "Requests by Route (1h)",
+                            "title": "Requests by Route (in range)",
                             "type": "piechart",
                             "datasource": {
                               "type": "prometheus",
@@ -1074,17 +1304,19 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 44
+                              "y": 49
                             },
                             "targets": [
                               {
-                                "expr": "sum by (route) (increase(shopnest_http_requests_total{route=~\"$route\"}[1h]))",
+                                "expr": "sum by (route) (increase(shopnest_http_requests_total{job=\"backend\", route=~\"$route\"}[$__range]))",
                                 "legendFormat": "{{route}}",
                                 "refId": "A",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                }
+                                },
+                                "instant": true,
+                                "range": false
                               }
                             ],
                             "fieldConfig": {
@@ -1101,7 +1333,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 51
+                              "y": 56
                             }
                           },
                           {
@@ -1116,7 +1348,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 52
+                              "y": 57
                             },
                             "targets": [
                               {
@@ -1155,7 +1387,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 52
+                              "y": 57
                             },
                             "targets": [
                               {
@@ -1185,7 +1417,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 59
+                              "y": 64
                             },
                             "targets": [
                               {
@@ -1217,7 +1449,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 59
+                              "y": 64
                             },
                             "targets": [
                               {
@@ -1249,7 +1481,7 @@ applications:
                               "h": 7,
                               "w": 24,
                               "x": 0,
-                              "y": 66
+                              "y": 71
                             },
                             "targets": [
                               {
@@ -1278,7 +1510,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 73
+                              "y": 78
                             }
                           },
                           {
@@ -1293,7 +1525,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 74
+                              "y": 79
                             },
                             "targets": [
                               {
@@ -1327,7 +1559,7 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 74
+                              "y": 79
                             },
                             "targets": [
                               {
@@ -1351,7 +1583,7 @@ applications:
                           },
                           {
                             "id": 34,
-                            "title": "Node Disk Usage",
+                            "title": "Node Root Disk Usage",
                             "type": "timeseries",
                             "datasource": {
                               "type": "prometheus",
@@ -1361,11 +1593,11 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 0,
-                              "y": 81
+                              "y": 86
                             },
                             "targets": [
                               {
-                                "expr": "1 - (node_filesystem_avail_bytes{fstype!=\"tmpfs\"} / node_filesystem_size_bytes{fstype!=\"tmpfs\"})",
+                                "expr": "1 - (node_filesystem_avail_bytes{mountpoint=\"/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes{mountpoint=\"/\", fstype!=\"tmpfs\"})",
                                 "legendFormat": "{{instance}} {{mountpoint}}",
                                 "refId": "A",
                                 "datasource": {
@@ -1395,11 +1627,11 @@ applications:
                               "h": 7,
                               "w": 12,
                               "x": 12,
-                              "y": 81
+                              "y": 86
                             },
                             "targets": [
                               {
-                                "expr": "sum by (instance) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*\"}[5m]))",
+                                "expr": "sum by (instance) (rate(node_network_receive_bytes_total{device=~\"(eth|ens)[0-9]+\"}[5m]))",
                                 "legendFormat": "{{instance}} rx",
                                 "refId": "A",
                                 "datasource": {
@@ -1408,7 +1640,7 @@ applications:
                                 }
                               },
                               {
-                                "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*\"}[5m]))",
+                                "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{device=~\"(eth|ens)[0-9]+\"}[5m]))",
                                 "legendFormat": "{{instance}} tx",
                                 "refId": "B",
                                 "datasource": {
@@ -1422,7 +1654,8 @@ applications:
                                 "unit": "Bps"
                               },
                               "overrides": []
-                            }
+                            },
+                            "description": "Primary NICs only. Pod-side interfaces (veth*, eni* on EKS, azv* on AKS) and the accelerated-networking VF that mirrors eth0 on Azure would count the same bytes twice."
                           },
                           {
                             "id": 36,
@@ -1433,7 +1666,7 @@ applications:
                               "h": 1,
                               "w": 24,
                               "x": 0,
-                              "y": 88
+                              "y": 93
                             }
                           },
                           {
@@ -1448,7 +1681,7 @@ applications:
                               "h": 7,
                               "w": 24,
                               "x": 0,
-                              "y": 89
+                              "y": 94
                             },
                             "targets": [
                               {
@@ -1478,7 +1711,7 @@ applications:
                               "h": 11,
                               "w": 24,
                               "x": 0,
-                              "y": 96
+                              "y": 101
                             },
                             "targets": [
                               {
@@ -1874,8 +2107,17 @@ applications:
             alloy:
               configMap:
                 content: |-
+                  // Alloy runs as a DaemonSet, so without this selector every
+                  // Alloy pod discovered and tailed EVERY pod in the cluster -
+                  // each log line was shipped once per node. Each instance now
+                  // only takes the pods scheduled on its own node (the chart
+                  // sets K8S_NODE_NAME from spec.nodeName).
                   discovery.kubernetes "pods" {
                     role = "pod"
+                    selectors {
+                      role  = "pod"
+                      field = "spec.nodeName=" + sys.env("K8S_NODE_NAME")
+                    }
                   }
 
                   discovery.relabel "pods" {
@@ -1894,6 +2136,11 @@ applications:
                     rule {
                       source_labels = ["__meta_kubernetes_pod_container_name"]
                       target_label  = "container"
+                    }
+
+                    rule {
+                      source_labels = ["__meta_kubernetes_pod_node_name"]
+                      target_label  = "node"
                     }
                   }
 
