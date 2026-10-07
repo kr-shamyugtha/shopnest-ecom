@@ -6,6 +6,11 @@ jest.mock('../models/Order', () => {
 });
 jest.mock('../utils/sendEmail', () => jest.fn().mockResolvedValue());
 
+const sendEmail = require('../utils/sendEmail');
+const { ordersCreatedTotal, orderCreationFailuresTotal } = require('../metrics/metrics');
+
+const counterValue = async (counter) => (await counter.get()).values[0]?.value ?? 0;
+
 const Order = require('../models/Order');
 const {
   addOrderItems,
@@ -136,5 +141,54 @@ describe('addOrderItems', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ message: 'No order items' });
     expect(Order).not.toHaveBeenCalled();
+  });
+
+  describe('order metrics', () => {
+    const placeOrder = () => {
+      const res = mockRes();
+      return addOrderItems(
+        {
+          user: { _id: 'u1', name: 'Test', email: 't@example.com' },
+          body: { items: [{ productId: 'p1', qty: 1 }], totalAmount: 10, address: { street: 's', city: 'c' } },
+        },
+        res
+      ).then(() => res);
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      ordersCreatedTotal.reset();
+      orderCreationFailuresTotal.reset();
+    });
+
+    it('counts a saved order as created', async () => {
+      Order.mockImplementation(function Order(doc) { return { ...doc, _id: 'o1', save: async function save() { return this; } }; });
+
+      const res = await placeOrder();
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(await counterValue(ordersCreatedTotal)).toBe(1);
+      expect(await counterValue(orderCreationFailuresTotal)).toBe(0);
+    });
+
+    it('counts a failed save as a failure, not a creation', async () => {
+      Order.mockImplementation(function Order() { return { save: async () => { throw new Error('db down'); } }; });
+
+      const res = await placeOrder();
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(await counterValue(ordersCreatedTotal)).toBe(0);
+      expect(await counterValue(orderCreationFailuresTotal)).toBe(1);
+    });
+
+    it('does not count an order as failed when only the confirmation email fails', async () => {
+      Order.mockImplementation(function Order(doc) { return { ...doc, _id: 'o1', save: async function save() { return this; } }; });
+      sendEmail.mockRejectedValueOnce(new Error('smtp down'));
+
+      await placeOrder();
+
+      expect(await counterValue(ordersCreatedTotal)).toBe(1);
+      expect(await counterValue(orderCreationFailuresTotal)).toBe(0);
+    });
   });
 });
