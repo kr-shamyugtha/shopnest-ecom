@@ -82,6 +82,79 @@ const paymentVerificationFailuresTotal = new client.Counter({
 
 
 /*
+ * Payment attempts by outcome, read from MongoDB on every scrape.
+ *
+ * The success rate on the dashboard is built from this rather than from the
+ * verification counters below: those live in process memory and reset to 0
+ * on every restart, while the attempts and orders they were compared with are
+ * database totals. Every status in the schema is exported (0 when empty) so a
+ * status with no attempts reads 0 instead of disappearing from the panels.
+ */
+const paymentAttemptsByStatus = new client.Gauge({
+  name: 'shopnest_payment_attempts_by_status',
+  help: 'Payment attempts in MongoDB by status (created = opened but not completed)',
+  labelNames: ['status'],
+
+  async collect() {
+    try {
+      const PaymentAttempt = require('../models/PaymentAttempt');
+
+      const statuses = PaymentAttempt.schema.path('status').enumValues;
+
+      const counts = await PaymentAttempt.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]);
+
+      const countMap = Object.fromEntries(counts.map(item => [item._id, item.count]));
+
+      for (const status of statuses) {
+        this.set({ status }, countMap[status] || 0);
+      }
+
+      dbMetricsUp.set({ metric: 'shopnest_payment_attempts_by_status' }, 1);
+    } catch (error) {
+      dbMetricsUp.set({ metric: 'shopnest_payment_attempts_by_status' }, 0);
+      console.error('Failed to collect shopnest_payment_attempts_by_status:', error);
+    }
+  }
+});
+
+/*
+ * Orders by how they were paid, read from MongoDB on every scrape.
+ *
+ * Checkout saves an order only after Razorpay verification succeeds, with the
+ * Razorpay payment id (pay_...). The "Student Bypass" path saves orders with a
+ * bypass_txn_... id and no payment at all. Without this split, half the orders
+ * looked like payments that had never been verified.
+ */
+const ordersByPaymentMethod = new client.Gauge({
+  name: 'shopnest_orders_by_payment_method',
+  help: 'Orders in MongoDB by payment method (razorpay, bypass, other)',
+  labelNames: ['method'],
+
+  async collect() {
+    try {
+      const Order = require('../models/Order');
+
+      const [razorpay, bypass, total] = await Promise.all([
+        Order.countDocuments({ paymentId: /^pay_/ }),
+        Order.countDocuments({ paymentId: /^bypass_/ }),
+        Order.countDocuments()
+      ]);
+
+      this.set({ method: 'razorpay' }, razorpay);
+      this.set({ method: 'bypass' }, bypass);
+      this.set({ method: 'other' }, total - razorpay - bypass);
+
+      dbMetricsUp.set({ metric: 'shopnest_orders_by_payment_method' }, 1);
+    } catch (error) {
+      dbMetricsUp.set({ metric: 'shopnest_orders_by_payment_method' }, 0);
+      console.error('Failed to collect shopnest_orders_by_payment_method:', error);
+    }
+  }
+});
+
+/*
  * Current total number of orders.
  *
  * This is a point-in-time value, so we calculate it
@@ -178,5 +251,7 @@ module.exports = {
   paymentVerificationFailuresTotal,
   ordersTotal,
   ordersByStatus,
+  paymentAttemptsByStatus,
+  ordersByPaymentMethod,
   dbMetricsUp
 };

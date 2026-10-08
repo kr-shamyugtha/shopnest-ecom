@@ -788,15 +788,16 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 6,
+                              "w": 4,
                               "x": 0,
                               "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "max(shopnest_payment_attempts_total)",
-                                "legendFormat": "attempts",
                                 "refId": "A",
+                                "expr": "max(shopnest_payment_attempts_total)",
+                                "instant": true,
+                                "range": false,
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
@@ -807,11 +808,11 @@ applications:
                               "defaults": {},
                               "overrides": []
                             },
-                            "description": "Despite the _total suffix this is a GAUGE - PaymentAttempt.countDocuments() at scrape time. rate() on it is semantically wrong; it is not a counter."
+                            "description": "Every Razorpay checkout ever started, from MongoDB. Includes legacy records written before attempts stored a Razorpay id, whose outcome is unknown."
                           },
                           {
                             "id": 11,
-                            "title": "Verification Successes (in range)",
+                            "title": "Paid via Razorpay (Atlas)",
                             "type": "stat",
                             "datasource": {
                               "type": "prometheus",
@@ -819,21 +820,20 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 6,
-                              "x": 6,
+                              "w": 4,
+                              "x": 4,
                               "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "round(sum(increase(shopnest_payment_verification_success_total[$__range])) or vector(0))",
-                                "legendFormat": "success",
                                 "refId": "A",
+                                "expr": "max(shopnest_orders_by_payment_method{method=\"razorpay\"})",
+                                "instant": true,
+                                "range": false,
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                },
-                                "instant": true,
-                                "range": false
+                                }
                               }
                             ],
                             "fieldConfig": {
@@ -844,11 +844,12 @@ applications:
                                 }
                               },
                               "overrides": []
-                            }
+                            },
+                            "description": "Orders paid through Razorpay. Checkout saves an order only after /api/payment/verify succeeds, so every one of these is a verified payment. Read from MongoDB, so it survives restarts (the old in-memory counter showed 0 after every restart)."
                           },
                           {
                             "id": 12,
-                            "title": "Verification Failures (in range)",
+                            "title": "Failed Payments (Atlas)",
                             "type": "stat",
                             "datasource": {
                               "type": "prometheus",
@@ -856,21 +857,20 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 6,
-                              "x": 12,
+                              "w": 4,
+                              "x": 8,
                               "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "round(sum(increase(shopnest_payment_verification_failures_total[$__range])) or vector(0))",
-                                "legendFormat": "failures",
                                 "refId": "A",
+                                "expr": "sum(max by (status) (shopnest_payment_attempts_by_status{status=~\"failed|verification_failed\"}))",
+                                "instant": true,
+                                "range": false,
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                },
-                                "instant": true,
-                                "range": false
+                                }
                               }
                             ],
                             "fieldConfig": {
@@ -881,11 +881,12 @@ applications:
                                 }
                               },
                               "overrides": []
-                            }
+                            },
+                            "description": "Attempts where Razorpay could not create the order, or the payment came back with an invalid signature."
                           },
                           {
                             "id": 13,
-                            "title": "Payment Success Rate (in range)",
+                            "title": "Payment Success Rate (Atlas)",
                             "type": "gauge",
                             "datasource": {
                               "type": "prometheus",
@@ -893,21 +894,20 @@ applications:
                             },
                             "gridPos": {
                               "h": 5,
-                              "w": 6,
-                              "x": 18,
+                              "w": 8,
+                              "x": 16,
                               "y": 24
                             },
                             "targets": [
                               {
-                                "expr": "sum(increase(shopnest_payment_verification_success_total[$__range])) / (sum(increase(shopnest_payment_verification_success_total[$__range])) + sum(increase(shopnest_payment_verification_failures_total[$__range])) > 0)",
-                                "legendFormat": "success rate",
                                 "refId": "A",
+                                "expr": "max(shopnest_payment_attempts_by_status{status=\"verified\"}) / (sum(max by (status) (shopnest_payment_attempts_by_status{status=~\"verified|failed|verification_failed\"})) > 0)",
+                                "instant": true,
+                                "range": false,
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
-                                },
-                                "instant": true,
-                                "range": false
+                                }
                               }
                             ],
                             "fieldConfig": {
@@ -936,11 +936,48 @@ applications:
                               },
                               "overrides": []
                             },
-                            "description": "Successful / all verifications in the selected range. Shows \"No payments\" rather than 0% when there were none, so an idle shop does not read as a failing one."
+                            "description": "Verified / (verified + failed) among completed payment attempts, from MongoDB. Abandoned checkouts and legacy records are excluded. Shows \"No payments\" rather than 0% when none have completed."
+                          },
+                          {
+                            "id": 45,
+                            "title": "Abandoned Checkouts (Atlas)",
+                            "type": "stat",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "gridPos": {
+                              "h": 5,
+                              "w": 4,
+                              "x": 12,
+                              "y": 24
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "max(shopnest_payment_attempts_by_status{status=\"created\"})",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {
+                                "color": {
+                                  "mode": "fixed",
+                                  "fixedColor": "orange"
+                                }
+                              },
+                              "overrides": []
+                            },
+                            "description": "Razorpay checkout opened but never completed (closed, timed out, or still in progress). Not counted as failures."
                           },
                           {
                             "id": 14,
-                            "title": "Verification Rate (per min)",
+                            "title": "Verification Rate (per min, live)",
                             "type": "timeseries",
                             "datasource": {
                               "type": "prometheus",
@@ -948,7 +985,7 @@ applications:
                             },
                             "gridPos": {
                               "h": 7,
-                              "w": 12,
+                              "w": 8,
                               "x": 0,
                               "y": 29
                             },
@@ -975,11 +1012,12 @@ applications:
                             "fieldConfig": {
                               "defaults": {},
                               "overrides": []
-                            }
+                            },
+                            "description": "Live verification activity from the backend's in-process counters. Use for \"what is happening now\"; the Atlas panels above are the totals."
                           },
                           {
                             "id": 15,
-                            "title": "Payment Attempts Over Time (Atlas)",
+                            "title": "Payment Attempts by Status (Atlas)",
                             "type": "timeseries",
                             "datasource": {
                               "type": "prometheus",
@@ -987,15 +1025,15 @@ applications:
                             },
                             "gridPos": {
                               "h": 7,
-                              "w": 12,
-                              "x": 12,
+                              "w": 8,
+                              "x": 8,
                               "y": 29
                             },
                             "targets": [
                               {
-                                "expr": "max(shopnest_payment_attempts_total)",
-                                "legendFormat": "attempts",
                                 "refId": "A",
+                                "expr": "max by (status) (shopnest_payment_attempts_by_status)",
+                                "legendFormat": "{{status}}",
                                 "datasource": {
                                   "type": "prometheus",
                                   "uid": "${DS_PROMETHEUS}"
@@ -1006,7 +1044,61 @@ applications:
                               "defaults": {},
                               "overrides": []
                             },
-                            "description": "Plotted as the absolute gauge value. A rate() here would be meaningless."
+                            "description": "created = abandoned / in progress; legacy = older records with unknown outcome."
+                          },
+                          {
+                            "id": 46,
+                            "type": "piechart",
+                            "title": "Orders by Payment Method (Atlas)",
+                            "datasource": {
+                              "type": "prometheus",
+                              "uid": "${DS_PROMETHEUS}"
+                            },
+                            "description": "razorpay = paid and verified; bypass = placed through the Student Bypass with no payment. Together they make up Total Orders.",
+                            "gridPos": {
+                              "h": 7,
+                              "w": 8,
+                              "x": 16,
+                              "y": 29
+                            },
+                            "targets": [
+                              {
+                                "refId": "A",
+                                "expr": "max by (method) (shopnest_orders_by_payment_method)",
+                                "legendFormat": "{{method}}",
+                                "instant": true,
+                                "range": false,
+                                "datasource": {
+                                  "type": "prometheus",
+                                  "uid": "${DS_PROMETHEUS}"
+                                }
+                              }
+                            ],
+                            "fieldConfig": {
+                              "defaults": {},
+                              "overrides": []
+                            },
+                            "options": {
+                              "reduceOptions": {
+                                "calcs": [
+                                  "lastNotNull"
+                                ],
+                                "fields": "",
+                                "values": false
+                              },
+                              "pieType": "donut",
+                              "legend": {
+                                "displayMode": "table",
+                                "placement": "right",
+                                "values": [
+                                  "value",
+                                  "percent"
+                                ]
+                              },
+                              "displayLabels": [
+                                "value"
+                              ]
+                            }
                           },
                           {
                             "id": 16,

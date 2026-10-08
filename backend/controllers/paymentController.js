@@ -49,6 +49,27 @@ const createOrder = async (req, res) => {
   }
 };
 
+// Persist the verification outcome on the attempt it belongs to, so the
+// payment success rate survives restarts. The in-memory counters below reset
+// whenever the pod restarts, which is why the dashboard used to show 0
+// verified payments against dozens of paid orders. Never fails the request:
+// the customer's payment outcome must not depend on bookkeeping.
+const recordVerification = async (razorpayOrderId, razorpayPaymentId, verified) => {
+  if (!razorpayOrderId) return;
+
+  try {
+    await PaymentAttempt.updateOne(
+      { paymentId: razorpayOrderId },
+      {
+        status: verified ? 'verified' : 'verification_failed',
+        razorpayPaymentId: razorpayPaymentId || null
+      }
+    );
+  } catch (error) {
+    console.error('Failed to record payment verification:', error.message);
+  }
+};
+
 const verifyPayment = async (req, res) => {
   try {
     const {
@@ -66,12 +87,14 @@ const verifyPayment = async (req, res) => {
 
     if (razorpay_signature === expectedSign) {
       paymentVerificationSuccessTotal.inc();
+      await recordVerification(razorpay_order_id, razorpay_payment_id, true);
 
       return res.status(200).json({
         message: "Payment verified successfully"
       });
     } else {
       paymentVerificationFailuresTotal.inc();
+      await recordVerification(razorpay_order_id, razorpay_payment_id, false);
 
       return res.status(400).json({
         message: "Invalid signature sent!"
